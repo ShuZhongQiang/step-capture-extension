@@ -4,6 +4,14 @@ const NATIVE_CAPTURE_RETRIES = 2;
 const NATIVE_CAPTURE_RETRY_DELAY_MS = 80;
 const STRONG_INTERACTIVE_SELECTOR = 'a,button,input,textarea,select,option,[role="button"],[role="link"],[contenteditable="true"]';
 const CARD_LIKE_PATTERN = /(card|item|panel|tile|list|row|cell|module|block|box|content)/i;
+const BUTTON_LIKE_PATTERN = /(btn|button)/i;
+const HIGHLIGHT_THEME = {
+  stroke: 'rgba(249, 115, 22, 0.55)',
+  fill: 'rgba(249, 115, 22, 0.14)',
+  glowNear: 'rgba(249, 115, 22, 0.25)',
+  glowFar: 'rgba(249, 115, 22, 0.12)',
+  center: 'rgba(249, 115, 22, 0.9)'
+};
 
 function init() {
   createOverlay();
@@ -113,8 +121,9 @@ async function handleClick(event) {
 }
 
 function resolveClickTarget(element, event) {
-  if (isStrongInteractiveElement(element)) {
-    return element;
+  const interactiveAncestor = getInteractiveAncestor(element);
+  if (interactiveAncestor) {
+    return interactiveAncestor;
   }
 
   const originRect = element.getBoundingClientRect();
@@ -174,6 +183,44 @@ function isStrongInteractiveElement(element) {
 
   const nearestInteractive = element.closest(STRONG_INTERACTIVE_SELECTOR);
   return nearestInteractive === element;
+}
+
+function getInteractiveAncestor(element) {
+  const strongAncestor = element.closest(STRONG_INTERACTIVE_SELECTOR);
+  if (strongAncestor) {
+    return strongAncestor;
+  }
+
+  let current = element;
+  let depth = 0;
+  while (current && current !== document.body && depth < 6) {
+    if (isButtonLikeElement(current)) {
+      return current;
+    }
+    current = current.parentElement;
+    depth += 1;
+  }
+
+  return null;
+}
+
+function isButtonLikeElement(element) {
+  const className = typeof element.className === 'string' ? element.className : '';
+  const id = element.id || '';
+  const hint = `${className} ${id}`;
+  if (!BUTTON_LIKE_PATTERN.test(hint)) {
+    return false;
+  }
+
+  if (hasClickableContainerHint(element)) {
+    return true;
+  }
+
+  if (typeof element.tabIndex === 'number' && element.tabIndex >= 0) {
+    return true;
+  }
+
+  return false;
 }
 
 function hasClickableContainerHint(element) {
@@ -416,17 +463,34 @@ function annotateScreenshot(dataUrl, highlightRect) {
       const width = Math.max(1, highlightRect.width * scaleX);
       const height = Math.max(1, highlightRect.height * scaleY);
       const lineWidth = Math.max(2, Math.round(((scaleX + scaleY) / 2) * 3));
+      const radius = Math.max(8, Math.round(12 * ((scaleX + scaleY) / 2)));
 
-      context.fillStyle = 'rgba(239, 68, 68, 0.16)';
-      context.strokeStyle = '#ef4444';
+      drawRoundedRect(context, x, y, width, height, radius);
+      context.fillStyle = HIGHLIGHT_THEME.fill;
+      context.fill();
+
+      context.save();
+      context.strokeStyle = HIGHLIGHT_THEME.stroke;
       context.lineWidth = lineWidth;
-      context.fillRect(x, y, width, height);
-      context.strokeRect(x, y, width, height);
+      context.shadowColor = HIGHLIGHT_THEME.glowNear;
+      context.shadowBlur = Math.max(10, Math.round(lineWidth * 5));
+      drawRoundedRect(context, x, y, width, height, radius);
+      context.stroke();
+      context.restore();
 
-      const radius = Math.max(4, Math.round(lineWidth * 1.5));
+      context.save();
+      context.strokeStyle = HIGHLIGHT_THEME.glowFar;
+      context.lineWidth = Math.max(1, Math.round(lineWidth * 0.8));
+      context.shadowColor = HIGHLIGHT_THEME.glowFar;
+      context.shadowBlur = Math.max(18, Math.round(lineWidth * 9));
+      drawRoundedRect(context, x, y, width, height, radius + 1);
+      context.stroke();
+      context.restore();
+
+      const centerRadius = Math.max(4, Math.round(lineWidth * 1.5));
       context.beginPath();
-      context.arc(x + width / 2, y + height / 2, radius, 0, Math.PI * 2);
-      context.fillStyle = '#ef4444';
+      context.arc(x + width / 2, y + height / 2, centerRadius, 0, Math.PI * 2);
+      context.fillStyle = HIGHLIGHT_THEME.center;
       context.fill();
 
       resolve(canvas.toDataURL('image/png'));
@@ -459,6 +523,22 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function drawRoundedRect(context, x, y, width, height, radius) {
+  const maxRadius = Math.min(radius, width / 2, height / 2);
+
+  context.beginPath();
+  context.moveTo(x + maxRadius, y);
+  context.lineTo(x + width - maxRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + maxRadius);
+  context.lineTo(x + width, y + height - maxRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - maxRadius, y + height);
+  context.lineTo(x + maxRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - maxRadius);
+  context.lineTo(x, y + maxRadius);
+  context.quadraticCurveTo(x, y, x + maxRadius, y);
+  context.closePath();
 }
 
 init();
