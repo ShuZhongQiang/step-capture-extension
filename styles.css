@@ -1,0 +1,385 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  background-color: #f5f5f5;
+}
+
+/* ========================
+   侧边栏专属布局
+   ======================== */
+.sidepanel-body {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #ffffff;
+}
+
+.sidepanel-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 0;
+  background-color: #ffffff;
+}
+
+/* 顶部标题栏 */
+.sidepanel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  flex-shrink: 0;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-icon {
+  font-size: 18px;
+}
+
+.sidepanel-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  text-align: left;
+}
+
+/* 录制中红色徽标 */
+.recording-badge {
+  background-color: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  animation: badge-pulse 1.2s infinite;
+  letter-spacing: 0.5px;
+}
+
+.recording-badge.hidden {
+  display: none;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 侧边栏内容区 */
+.sidepanel-container .control-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  flex-shrink: 0;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sidepanel-container .primary-button,
+.sidepanel-container .secondary-button {
+  flex: 1;
+  margin: 0;
+}
+
+.sidepanel-container .steps-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 16px;
+  overflow: hidden;
+}
+
+.sidepanel-container .steps-container {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.sidepanel-container .export-section {
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+
+/* 步骤计数 */
+.steps-count {
+  color: #6b7280;
+  font-weight: normal;
+  font-size: 13px;
+}
+
+/* ========================
+   弹出面板样式（保留兼容）
+   ======================== */
+.popup-container {
+  width: 350px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.popup-container h1 {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #3b82f6;
+  text-align: center;
+}
+
+.popup-container h2 {
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+
+/* 控制区域样式 */
+.control-section {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.primary-button {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background-color 0.2s;
+}
+
+.primary-button:hover {
+  background-color: #2563eb;
+}
+
+.secondary-button {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.secondary-button:hover {
+  background-color: #dc2626;
+}
+
+.secondary-button:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* 步骤列表样式 */
+.steps-section {
+  margin-bottom: 20px;
+}
+
+.steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.steps-header h2 {
+  margin-bottom: 0;
+}
+
+.clear-button {
+  background: none;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.clear-button:hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.steps-container {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.empty-message {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.step-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.step-number {
+  width: 24px;
+  height: 24px;
+  background-color: #3b82f6;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-text {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.step-selector {
+  font-size: 10px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.step-screenshot {
+  width: 60px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+/* 导出区域样式 */
+.export-section {
+  margin-top: 20px;
+}
+
+.export-options {
+  display: flex;
+  gap: 10px;
+}
+
+.export-button {
+  flex: 1;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.export-button:hover {
+  background-color: #059669;
+}
+
+/* 覆盖层样式 */
+.recording-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.highlight-element {
+  position: absolute;
+  border: 2px solid #ef4444;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+  animation: pulse 1s infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+  }
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>步骤图录制器 - 选项</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .options-container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .option-group {
+      margin-bottom: 20px;
+    }
+    .option-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    .option-group input[type="checkbox"] {
+      margin-right: 10px;
+    }
+    .save-button {
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .save-button:hover {
+      background-color: #2563eb;
+    }
+    .status-message {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .success {
+      background-color: #d1fae5;
+      color: #065f46;
+    }
+  </style>
+</head>
+<body>
+  <div class="options-container">
+    <h1>步骤图录制器 - 选项</h1>
+    
+    <div class="option-group">
+      <label for="auto-screenshot">自动截图</label>
+      <input type="checkbox" id="auto-screenshot" checked>
+      <span>每次点击时自动截图</span>
+    </div>
+    
+    <div class="option-group">
+      <label for="highlight-element">高亮元素</label>
+      <input type="checkbox" id="highlight-element" checked>
+      <span>点击时高亮显示元素</span>
+    </div>
+    
+    <div class="option-group">
+      <label for="include-selector">包含选择器</label>
+      <input type="checkbox" id="include-selector" checked>
+      <span>在导出的步骤中包含元素选择器</span>
+    </div>
+    
+    <button class="save-button" id="save-options">保存选项</button>
+    <div id="status-message" class="status-message" style="display: none;"></div>
+  </div>
+  
+  <script>
+    // 加载选项
+    function loadOptions() {
+      chrome.storage.local.get(['autoScreenshot', 'highlightElement', 'includeSelector'], (result) => {
+        document.getElementById('auto-screenshot').checked = result.autoScreenshot !== false;
+        document.getElementById('highlight-element').checked = result.highlightElement !== false;
+        document.getElementById('include-selector').checked = result.includeSelector !== false;
+      });
+    }
+    
+    // 保存选项
+    function saveOptions() {
+      const autoScreenshot = document.getElementById('auto-screenshot').checked;
+      const highlightElement = document.getElementById('highlight-element').checked;
+      const includeSelector = document.getElementById('include-selector').checked;
+      
+      chrome.storage.local.set({
+        autoScreenshot,
+        highlightElement,
+        includeSelector
+      }, () => {
+        // 显示保存成功消息
+        const status = document.getElementById('status-message');
+        status.textContent = '选项已保存';
+        status.className = 'status-message success';
+        status.style.display = 'block';
+        
+        // 3秒后隐藏消息
+        setTimeout(() => {
+          status.style.display = 'none';
+        }, 3000);
+      });
+    }
+    
+    // 初始化
+    document.addEventListener('DOMContentLoaded', loadOptions);
+    document.getElementById('save-options').addEventListener('click', saveOptions);
+  </script>
+</body>
+</html>

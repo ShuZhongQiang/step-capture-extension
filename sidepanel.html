@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>步骤图录制器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="sidepanel-body">
+  <div class="sidepanel-container">
+
+    <!-- 顶部标题栏 -->
+    <div class="sidepanel-header">
+      <div class="header-title">
+        <span class="header-icon">🎬</span>
+        <h1>步骤图录制器</h1>
+      </div>
+      <div id="recording-badge" class="recording-badge hidden">● REC</div>
+    </div>
+
+    <!-- 录制控制 -->
+    <div class="control-section">
+      <div class="control-buttons">
+        <button id="start-record" class="primary-button">▶ 开始录制</button>
+        <button id="stop-record" class="secondary-button" disabled>■ 停止录制</button>
+      </div>
+      <div id="recording-status" class="status">就绪</div>
+    </div>
+
+    <!-- 步骤列表 -->
+    <div class="steps-section">
+      <div class="steps-header">
+        <h2>步骤列表 <span id="steps-count" class="steps-count"></span></h2>
+        <button id="clear-steps" class="clear-button" title="清空所有步骤">🗑 清空</button>
+      </div>
+      <div id="steps-container" class="steps-container">
+        <p class="empty-message">暂无步骤记录</p>
+      </div>
+    </div>
+
+    <!-- 导出选项 -->
+    <div class="export-section">
+      <h2>导出</h2>
+      <div class="export-options">
+        <button id="export-markdown" class="export-button">📄 Markdown</button>
+        <button id="export-html" class="export-button">🌐 HTML</button>
+      </div>
+    </div>
+
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
