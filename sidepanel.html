@@ -27,6 +27,23 @@
       <div id="recording-status" class="status">就绪</div>
     </div>
 
+    <!-- 模式选择 -->
+    <div class="mode-section">
+      <h2>录制模式</h2>
+      <div class="mode-options">
+        <label class="mode-option">
+          <input type="radio" name="recording-mode" value="auto" checked>
+          <span class="mode-label">自动模式</span>
+          <span class="mode-desc">点击后自动截图保存</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="recording-mode" value="manual">
+          <span class="mode-label">手动确认模式</span>
+          <span class="mode-desc">高亮后暂停，询问是否保存</span>
+        </label>
+      </div>
+    </div>
+
     <!-- 步骤列表 -->
     <div class="steps-section">
       <div class="steps-header">
@@ -48,6 +65,6 @@
     </div>
 
   </div>
-  <script src="popup.js"></script>
+  <script src="sidepanel.js"></script>
 </body>
 </html>

@@ -1,5 +1,9 @@
 ﻿let isRecording = false;
+let isManualConfirmMode = false;
 let overlay = null;
+let pendingManualAction = null;
+let isReplayingClick = false;
+const RECORDER_STYLE_ID = 'step-recorder-content-styles';
 const NATIVE_CAPTURE_RETRIES = 2;
 const NATIVE_CAPTURE_RETRY_DELAY_MS = 80;
 const STRONG_INTERACTIVE_SELECTOR = 'a,button,input,textarea,select,option,[role="button"],[role="link"],[contenteditable="true"]';
@@ -14,6 +18,7 @@ const HIGHLIGHT_THEME = {
 };
 
 function init() {
+  ensureRecorderStyles();
   createOverlay();
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -29,10 +34,151 @@ function init() {
       return false;
     }
 
+    if (message.action === 'setManualConfirmMode') {
+      setManualConfirmMode(message.enabled);
+      sendResponse({ ok: true });
+      return false;
+    }
+
+    if (message.action === 'confirmStep') {
+      handleConfirmStep(message.stepId, message.save);
+      sendResponse({ ok: true });
+      return false;
+    }
+
     return false;
   });
+
+  document.addEventListener('keydown', handleKeyDown);
 }
 
+
+function ensureRecorderStyles() {
+  if (document.getElementById(RECORDER_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = RECORDER_STYLE_ID;
+  style.textContent = `
+    .recording-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2147483646;
+    }
+
+    .highlight-element {
+      position: absolute;
+      border-radius: 12px;
+      pointer-events: none;
+      box-shadow:
+        0 0 0 1.5px rgba(249, 115, 22, 0.4),
+        0 0 12px 4px rgba(249, 115, 22, 0.18),
+        0 0 24px 8px rgba(249, 115, 22, 0.08);
+      animation: step-recorder-pulse 1.8s ease-in-out infinite;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .confirm-overlay-content {
+      background: #e8ecf1;
+      padding: 24px 32px;
+      border-radius: 20px;
+      max-width: 400px;
+      width: min(90vw, 400px);
+      box-shadow:
+        8px 8px 16px rgba(163, 177, 198, 0.7),
+        -8px -8px 16px rgba(255, 255, 255, 0.9),
+        0 0 0 1px rgba(249, 115, 22, 0.2);
+      text-align: center;
+      animation: step-recorder-confirm-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .confirm-overlay-text {
+      font-size: 15px;
+      color: #4a5568;
+      margin-bottom: 24px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .confirm-overlay-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+    }
+
+    .confirm-btn {
+      padding: 10px 24px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    .confirm-save {
+      background: linear-gradient(145deg, #fb923c, #f97316);
+      color: #fff;
+      box-shadow: 4px 4px 10px rgba(249, 115, 22, 0.28);
+    }
+
+    .confirm-cancel {
+      background: #fff;
+      color: #475569;
+      box-shadow: 4px 4px 10px rgba(148, 163, 184, 0.2);
+    }
+
+    .confirm-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .confirm-btn:active {
+      transform: translateY(0);
+    }
+
+    @keyframes step-recorder-pulse {
+      0%, 100% {
+        box-shadow:
+          0 0 0 1.5px rgba(249, 115, 22, 0.32),
+          0 0 10px 3px rgba(249, 115, 22, 0.14),
+          0 0 20px 6px rgba(249, 115, 22, 0.08);
+      }
+      50% {
+        box-shadow:
+          0 0 0 2px rgba(249, 115, 22, 0.48),
+          0 0 18px 6px rgba(249, 115, 22, 0.24),
+          0 0 32px 10px rgba(249, 115, 22, 0.12);
+      }
+    }
+
+    @keyframes step-recorder-confirm-pop {
+      from {
+        transform: scale(0.92);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+  `;
+
+  document.documentElement.appendChild(style);
+}
 function createOverlay() {
   if (overlay) {
     return;
@@ -40,6 +186,7 @@ function createOverlay() {
 
   overlay = document.createElement('div');
   overlay.className = 'recording-overlay';
+  overlay.setAttribute('data-step-recorder-ui', 'true');
   document.documentElement.appendChild(overlay);
 }
 
@@ -61,13 +208,25 @@ function stopRecording() {
   }
 
   isRecording = false;
+  pendingManualAction = null;
+  isReplayingClick = false;
   document.removeEventListener('click', handleClick, true);
   clearHighlights();
+  removeConfirmOverlay();
   console.log('[recording] stopped');
+}
+
+function setManualConfirmMode(enabled) {
+  isManualConfirmMode = enabled;
+  console.log(`[recording] manual confirm mode: ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 async function handleClick(event) {
   if (!isRecording) {
+    return;
+  }
+
+  if (isReplayingClick) {
     return;
   }
 
@@ -76,25 +235,54 @@ async function handleClick(event) {
     return;
   }
 
+  if (isRecorderUiElement(rawTarget)) {
+    return;
+  }
+
   const target = resolveClickTarget(rawTarget, event);
   const highlightRect = highlightElement(target);
-  const selector = getSelector(target);
-  const text = getElementText(target);
+  
+  window.currentHighlightRect = highlightRect;
+  window.currentSelector = getSelector(target);
+  window.currentText = getElementText(target);
+  
+  const selector = window.currentSelector;
+  const text = window.currentText;
   const stepId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  chrome.runtime.sendMessage({
-    action: 'captureStep',
-    stepId,
-    type: 'click',
-    selector,
-    text,
-    screenshot: null
-  }, (response) => {
-    if (response && response.ok) {
-      return;
+  if (isManualConfirmMode) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
     }
-    console.error('[captureStep] failed:', chrome.runtime.lastError);
-  });
+
+    pendingManualAction = buildPendingManualAction(rawTarget, target, event);
+    await showConfirmOverlay(stepId, text);
+    return;
+  }
+
+  try {
+    chrome.runtime.sendMessage({
+      action: 'captureStep',
+      stepId,
+      type: 'click',
+      selector,
+      text,
+      screenshot: null
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[captureStep] failed:', chrome.runtime.lastError);
+        return;
+      }
+      if (response && response.ok) {
+        return;
+      }
+    });
+  } catch (error) {
+    console.error('[captureStep] error:', error);
+    return;
+  }
 
   let screenshot = null;
   try {
@@ -108,16 +296,23 @@ async function handleClick(event) {
     return;
   }
 
-  chrome.runtime.sendMessage({
-    action: 'updateStepScreenshot',
-    stepId,
-    screenshot
-  }, (response) => {
-    if (response && response.ok) {
-      return;
-    }
-    console.error('[updateStepScreenshot] failed:', chrome.runtime.lastError);
-  });
+  try {
+    chrome.runtime.sendMessage({
+      action: 'updateStepScreenshot',
+      stepId,
+      screenshot
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[updateStepScreenshot] failed:', chrome.runtime.lastError);
+        return;
+      }
+      if (response && response.ok) {
+        return;
+      }
+    });
+  } catch (error) {
+    console.error('[updateStepScreenshot] error:', error);
+  }
 }
 
 function resolveClickTarget(element, event) {
@@ -294,6 +489,249 @@ function clearHighlights() {
 
   while (overlay.firstChild) {
     overlay.removeChild(overlay.firstChild);
+  }
+}
+
+function isRecorderUiElement(element) {
+  return Boolean(element.closest('[data-step-recorder-ui="true"]'));
+}
+
+function buildPendingManualAction(rawTarget, resolvedTarget, event) {
+  return {
+    rawTarget,
+    resolvedTarget,
+    mouseEventInit: {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      detail: typeof event.detail === 'number' ? event.detail : 1,
+      screenX: event.screenX,
+      screenY: event.screenY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
+      button: event.button,
+      buttons: event.buttons
+    }
+  };
+}
+
+function showConfirmOverlay(stepId, text) {
+  const confirmOverlay = document.createElement('div');
+  confirmOverlay.className = 'confirm-overlay';
+  confirmOverlay.setAttribute('data-step-recorder-ui', 'true');
+  confirmOverlay.innerHTML = `
+    <div class="confirm-overlay-content">
+      <div class="confirm-overlay-text">${text || '确认此步骤？'}</div>
+      <div class="confirm-overlay-actions">
+        <button class="confirm-btn confirm-save">保存 (Enter)</button>
+        <button class="confirm-btn confirm-cancel">取消 (Esc)</button>
+      </div>
+    </div>
+  `;
+  document.documentElement.appendChild(confirmOverlay);
+
+  window.currentConfirmStep = {
+    stepId,
+    text,
+    overlay: confirmOverlay
+  };
+
+  const saveBtn = confirmOverlay.querySelector('.confirm-save');
+  const cancelBtn = confirmOverlay.querySelector('.confirm-cancel');
+
+  saveBtn.addEventListener('click', () => {
+    handleConfirmStep(stepId, true);
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    handleConfirmStep(stepId, false);
+  });
+}
+
+function removeConfirmOverlay() {
+  if (window.currentConfirmStep && window.currentConfirmStep.overlay) {
+    window.currentConfirmStep.overlay.remove();
+    window.currentConfirmStep = null;
+  }
+}
+
+async function handleConfirmStep(stepId, save) {
+  if (!window.currentConfirmStep || window.currentConfirmStep.stepId !== stepId) {
+    console.warn('[confirm] step not found or mismatch:', stepId);
+    return;
+  }
+
+  const highlightRect = window.currentHighlightRect;
+  const selector = window.currentSelector || '';
+  const text = window.currentText || '';
+  window.currentHighlightRect = null;
+  window.currentSelector = null;
+  window.currentText = null;
+
+  removeConfirmOverlay();
+  clearHighlights();
+
+  if (!save) {
+    console.log('[confirm] step skipped:', stepId);
+    replayPendingManualAction();
+    return;
+  }
+
+  if (!highlightRect) {
+    console.warn('[confirm] no highlight rect found');
+    replayPendingManualAction();
+    return;
+  }
+
+  chrome.runtime.sendMessage({
+    action: 'captureStep',
+    stepId,
+    type: 'click',
+    selector,
+    text,
+    screenshot: null
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('[captureStep] failed:', chrome.runtime.lastError);
+      return;
+    }
+    if (response && response.ok) {
+      return;
+    }
+  });
+
+  let screenshot = null;
+  screenshot = await captureScreenshot(highlightRect);
+
+  if (!screenshot) {
+    console.warn('[captureScreenshot] failed');
+    return;
+  }
+
+  chrome.runtime.sendMessage({
+    action: 'updateStepScreenshot',
+    stepId,
+    screenshot
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('[updateStepScreenshot] failed:', chrome.runtime.lastError);
+      return;
+    }
+    if (response && response.ok) {
+      return;
+    }
+  });
+
+  replayPendingManualAction();
+}
+
+function replayPendingManualAction() {
+  const action = pendingManualAction;
+  pendingManualAction = null;
+
+  if (!action) {
+    return;
+  }
+
+  const replayTarget = getReplayTarget(action);
+  if (!replayTarget) {
+    return;
+  }
+
+  isReplayingClick = true;
+
+  try {
+    focusReplayTarget(replayTarget);
+    dispatchReplayPointerSequence(replayTarget, action.mouseEventInit);
+    triggerReplayClick(replayTarget, action.mouseEventInit);
+  } finally {
+    setTimeout(() => {
+      isReplayingClick = false;
+    }, 0);
+  }
+}
+
+function getReplayTarget(action) {
+  if (action.rawTarget instanceof Element && action.rawTarget.isConnected) {
+    return action.rawTarget;
+  }
+
+  if (action.resolvedTarget instanceof Element && action.resolvedTarget.isConnected) {
+    return action.resolvedTarget;
+  }
+
+  return null;
+}
+
+function focusReplayTarget(target) {
+  if (target instanceof HTMLElement && typeof target.focus === 'function') {
+    target.focus({ preventScroll: true });
+  }
+}
+
+function dispatchReplayPointerSequence(target, mouseEventInit) {
+  const PointerEventCtor = typeof PointerEvent === 'function' ? PointerEvent : null;
+
+  dispatchReplayEvent(target, 'pointerdown', mouseEventInit, PointerEventCtor);
+  dispatchReplayEvent(target, 'mousedown', mouseEventInit, MouseEvent);
+  dispatchReplayEvent(target, 'pointerup', mouseEventInit, PointerEventCtor);
+  dispatchReplayEvent(target, 'mouseup', mouseEventInit, MouseEvent);
+}
+
+function dispatchReplayEvent(target, type, mouseEventInit, EventCtor) {
+  if (typeof EventCtor !== 'function') {
+    return;
+  }
+
+  const baseInit = {
+    ...mouseEventInit,
+    view: window
+  };
+
+  const isPointerEvent = typeof PointerEvent === 'function' && EventCtor === PointerEvent;
+  if (isPointerEvent) {
+    target.dispatchEvent(new PointerEvent(type, {
+      ...baseInit,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true
+    }));
+    return;
+  }
+
+  target.dispatchEvent(new EventCtor(type, baseInit));
+}
+
+function triggerReplayClick(target, mouseEventInit) {
+  if (target instanceof HTMLElement && typeof target.click === 'function') {
+    target.click();
+    return;
+  }
+
+  target.dispatchEvent(new MouseEvent('click', {
+    ...mouseEventInit,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: window
+  }));
+}
+
+function handleKeyDown(event) {
+  if (!isManualConfirmMode || !window.currentConfirmStep) {
+    return;
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleConfirmStep(window.currentConfirmStep.stepId, true);
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    handleConfirmStep(window.currentConfirmStep.stepId, false);
   }
 }
 
@@ -536,3 +974,7 @@ function drawRoundedRect(context, x, y, width, height, radius) {
 }
 
 init();
+
+
+
+

@@ -1,5 +1,6 @@
-﻿let isRecording = false;
+let isRecording = false;
 let steps = [];
+let recordingMode = 'auto';
 
 const startRecordBtn = document.getElementById('start-record');
 const stopRecordBtn = document.getElementById('stop-record');
@@ -10,6 +11,7 @@ const exportHtmlBtn = document.getElementById('export-html');
 const clearStepsBtn = document.getElementById('clear-steps');
 const recordingBadge = document.getElementById('recording-badge');
 const stepsCount = document.getElementById('steps-count');
+const modeRadios = document.querySelectorAll('input[name="recording-mode"]');
 
 let jszip = null;
 
@@ -38,11 +40,13 @@ function loadJszipLibrary() {
 }
 
 function loadState() {
-  chrome.storage.local.get(['steps', 'isRecording'], (result) => {
+  chrome.storage.local.get(['steps', 'isRecording', 'recordingMode'], (result) => {
     steps = Array.isArray(result.steps) ? result.steps : [];
     isRecording = result.isRecording === true;
+    recordingMode = result.recordingMode || 'auto';
     renderSteps();
     updateUI();
+    updateModeUI();
   });
 }
 
@@ -71,6 +75,16 @@ function updateUI() {
   }
 }
 
+function updateModeUI() {
+  if (!modeRadios) {
+    return;
+  }
+
+  modeRadios.forEach((radio) => {
+    radio.checked = radio.value === recordingMode;
+  });
+}
+
 function setupEventListeners() {
   if (startRecordBtn) {
     startRecordBtn.addEventListener('click', startRecording);
@@ -91,6 +105,11 @@ function setupEventListeners() {
   if (clearStepsBtn) {
     clearStepsBtn.addEventListener('click', clearSteps);
   }
+  if (modeRadios) {
+    modeRadios.forEach((radio) => {
+      radio.addEventListener('change', handleModeChange);
+    });
+  }
 }
 
 function setupStorageListeners() {
@@ -107,6 +126,11 @@ function setupStorageListeners() {
     if (changes.isRecording) {
       isRecording = changes.isRecording.newValue === true;
       updateUI();
+    }
+
+    if (changes.recordingMode) {
+      recordingMode = changes.recordingMode.newValue || 'auto';
+      updateModeUI();
     }
   });
 }
@@ -140,13 +164,29 @@ function startRecording() {
           tabId: activeTab.id
         },
         (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('[popup startRecording] failed:', chrome.runtime.lastError);
+            alert('录制启动失败，请确认网页已完全加载后重试。');
+            return;
+          }
           if (response && response.ok) {
             isRecording = true;
             updateUI();
+            
+            chrome.runtime.sendMessage({
+              action: 'setManualConfirmMode',
+              tabId: activeTab.id,
+              enabled: recordingMode === 'manual'
+            }, (setModeResponse) => {
+              if (chrome.runtime.lastError) {
+                console.error('[popup setManualConfirmMode] failed:', chrome.runtime.lastError);
+              }
+            });
+            
             return;
           }
 
-          console.error('[popup startRecording] background响应失败', chrome.runtime.lastError);
+          console.error('[popup startRecording] background响应失败');
           alert('录制启动失败，请确认网页已完全加载后重试。');
         }
       );
@@ -162,6 +202,10 @@ function stopRecording() {
         tabId: activeTab ? activeTab.id : null
       },
       (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('[popup stopRecording] failed:', chrome.runtime.lastError);
+          return;
+        }
         if (response && response.ok) {
           isRecording = false;
           updateUI();
@@ -183,6 +227,27 @@ function clearSteps() {
   chrome.storage.local.set({ steps: [] }, () => {
     steps = [];
     renderSteps();
+  });
+}
+
+function handleModeChange(event) {
+  recordingMode = event.target.value;
+  chrome.storage.local.set({ recordingMode }, () => {
+    chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
+      if (chrome.runtime.lastError || !response || !response.isRecording || typeof response.recordingTabId !== 'number') {
+        return;
+      }
+
+      chrome.runtime.sendMessage({
+        action: 'setManualConfirmMode',
+        tabId: response.recordingTabId,
+        enabled: recordingMode === 'manual'
+      }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('[handleModeChange] failed to sync mode:', chrome.runtime.lastError);
+        }
+      });
+    });
   });
 }
 

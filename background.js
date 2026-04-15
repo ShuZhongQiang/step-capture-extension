@@ -1,7 +1,8 @@
-﻿const DEFAULT_STATE = {
+const DEFAULT_STATE = {
   steps: [],
   isRecording: false,
-  recordingTabId: null
+  recordingTabId: null,
+  recordingMode: 'auto'
 };
 
 function getStorage(keys) {
@@ -17,11 +18,12 @@ function setStorage(data) {
 }
 
 async function getRecorderState() {
-  const state = await getStorage(['steps', 'isRecording', 'recordingTabId']);
+  const state = await getStorage(['steps', 'isRecording', 'recordingTabId', 'recordingMode']);
   return {
     steps: Array.isArray(state.steps) ? state.steps : [],
     isRecording: state.isRecording === true,
-    recordingTabId: typeof state.recordingTabId === 'number' ? state.recordingTabId : null
+    recordingTabId: typeof state.recordingTabId === 'number' ? state.recordingTabId : null,
+    recordingMode: state.recordingMode || 'auto'
   };
 }
 
@@ -40,6 +42,18 @@ function sendMessageToTab(tabId, message) {
 
       resolve(true);
     });
+  });
+}
+
+async function setManualConfirmMode(tabId, enabled) {
+  const state = await getRecorderState();
+  if (state.recordingTabId !== tabId) {
+    return false;
+  }
+
+  return sendMessageToTab(tabId, {
+    action: 'setManualConfirmMode',
+    enabled
   });
 }
 
@@ -252,6 +266,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'setManualConfirmMode') {
+    setManualConfirmMode(message.tabId, message.enabled).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
   if (message.action === 'stopRecording') {
     stopRecording(message.tabId).then(() => sendResponse({ ok: true }));
     return true;
@@ -298,6 +317,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
       }
     }
 
+    if (success) {
+      await sendMessageToTab(tabId, {
+        action: 'setManualConfirmMode',
+        enabled: state.recordingMode === 'manual'
+      });
+    }
+
     console.log('[tabs.onUpdated] resume recording result:', success);
   });
 });
@@ -316,12 +342,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const current = await getStorage(['steps', 'isRecording', 'recordingTabId']);
+  const current = await getStorage(['steps', 'isRecording', 'recordingTabId', 'recordingMode']);
 
   await setStorage({
     steps: Array.isArray(current.steps) ? current.steps : DEFAULT_STATE.steps,
     isRecording: typeof current.isRecording === 'boolean' ? current.isRecording : DEFAULT_STATE.isRecording,
-    recordingTabId: typeof current.recordingTabId === 'number' ? current.recordingTabId : DEFAULT_STATE.recordingTabId
+    recordingTabId: typeof current.recordingTabId === 'number' ? current.recordingTabId : DEFAULT_STATE.recordingTabId,
+    recordingMode: current.recordingMode || DEFAULT_STATE.recordingMode
   });
 
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });

@@ -521,3 +521,188 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(145deg, #cbd5e0, #94a3b8);
 }
+
+/* ========================
+   手动确认覆盖层（注入到目标网页）
+   ======================== */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.confirm-overlay-content {
+  background: #e8ecf1;
+  padding: 24px 32px;
+  border-radius: 20px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow:
+    8px 8px 16px rgba(163, 177, 198, 0.7),
+    -8px -8px 16px rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(249, 115, 22, 0.2);
+  text-align: center;
+  animation: confirm-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.confirm-overlay-text {
+  font-size: 15px;
+  color: #4a5568;
+  margin-bottom: 24px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.confirm-overlay-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.confirm-btn {
+  padding: 10px 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  flex: 1;
+  min-width: 100px;
+}
+
+.confirm-save {
+  background: linear-gradient(145deg, #68d391, #48bb78);
+  color: white;
+  box-shadow:
+    4px 4px 8px rgba(163, 177, 198, 0.5),
+    -4px -4px 8px rgba(255, 255, 255, 0.7),
+    2px 2px 4px rgba(72, 187, 120, 0.3);
+}
+
+.confirm-save:hover {
+  background: linear-gradient(145deg, #9ae6b4, #68d391);
+  box-shadow:
+    6px 6px 12px rgba(163, 177, 198, 0.55),
+    -6px -6px 12px rgba(255, 255, 255, 0.8),
+    3px 3px 6px rgba(72, 187, 120, 0.35);
+  color: white;
+}
+
+.confirm-save:active {
+  background: linear-gradient(145deg, #38a169, #48bb78);
+  box-shadow:
+    inset 3px 3px 6px rgba(0, 0, 0, 0.12),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.confirm-cancel {
+  background: linear-gradient(145deg, #fc8181, #f56565);
+  color: white;
+  box-shadow:
+    4px 4px 8px rgba(163, 177, 198, 0.5),
+    -4px -4px 8px rgba(255, 255, 255, 0.7),
+    2px 2px 4px rgba(245, 101, 101, 0.3);
+}
+
+.confirm-cancel:hover {
+  background: linear-gradient(145deg, #feb2b2, #fc8181);
+  box-shadow:
+    6px 6px 12px rgba(163, 177, 198, 0.55),
+    -6px -6px 12px rgba(255, 255, 255, 0.8),
+    3px 3px 6px rgba(245, 101, 101, 0.35);
+  color: white;
+}
+
+.confirm-cancel:active {
+  background: linear-gradient(145deg, #e53e3e, #f56565);
+  box-shadow:
+    inset 3px 3px 6px rgba(0, 0, 0, 0.12),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes confirm-pop {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ========================
+   弹窗模式选择样式
+   ======================== */
+.mode-section {
+  padding: 16px 20px;
+  background: #e8ecf1;
+  border-radius: 18px;
+  box-shadow:
+    5px 5px 10px rgba(163, 177, 198, 0.55),
+    -5px -5px 10px rgba(255, 255, 255, 0.85);
+}
+
+.mode-section h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #718096;
+  margin-bottom: 12px;
+}
+
+.mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: #e8ecf1;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow:
+    3px 3px 6px rgba(163, 177, 198, 0.5),
+    -3px -3px 6px rgba(255, 255, 255, 0.8);
+}
+
+.mode-option:hover {
+  box-shadow:
+    4px 4px 8px rgba(163, 177, 198, 0.55),
+    -4px -4px 8px rgba(255, 255, 255, 0.9);
+}
+
+.mode-option input[type="radio"] {
+  margin-right: 12px;
+  width: 18px;
+  height: 18px;
+  accent-color: #f97316;
+  cursor: pointer;
+}
+
+.mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+  flex: 1;
+}
+
+.mode-desc {
+  font-size: 11px;
+  color: #a0aec0;
+  margin-top: 2px;
+}
