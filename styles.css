@@ -394,6 +394,37 @@ body {
     -2px -2px 4px rgba(255, 255, 255, 0.6);
 }
 
+.step-actions {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.step-delete-btn {
+  border: none;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow:
+    2px 2px 4px rgba(163, 177, 198, 0.45),
+    -2px -2px 4px rgba(255, 255, 255, 0.7);
+}
+
+.step-delete-btn:hover {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.step-delete-btn:active {
+  box-shadow:
+    inset 2px 2px 4px rgba(0, 0, 0, 0.1),
+    inset -2px -2px 4px rgba(255, 255, 255, 0.5);
+}
+
 /* 导出区域 */
 .sidepanel-container .export-section {
   padding: 16px 20px;

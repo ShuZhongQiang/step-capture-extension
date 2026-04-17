@@ -154,10 +154,11 @@ function startRecording() {
       return;
     }
 
-    chrome.storage.local.set({ steps: [] }, () => {
-      steps = [];
-      renderSteps();
+    const shouldClearSteps = steps.length > 0 && confirm(
+      '检测到已有步骤，是否清空后再开始录制？\n点击“确定”清空，点击“取消”保留。'
+    );
 
+    const startRecordingSession = () => {
       chrome.runtime.sendMessage(
         {
           action: 'startRecording',
@@ -190,7 +191,18 @@ function startRecording() {
           alert('录制启动失败，请确认网页已完全加载后重试。');
         }
       );
-    });
+    };
+
+    if (shouldClearSteps) {
+      chrome.storage.local.set({ steps: [] }, () => {
+        steps = [];
+        renderSteps();
+        startRecordingSession();
+      });
+      return;
+    }
+
+    startRecordingSession();
   });
 }
 
@@ -226,6 +238,22 @@ function clearSteps() {
 
   chrome.storage.local.set({ steps: [] }, () => {
     steps = [];
+    renderSteps();
+  });
+}
+
+function deleteStep(stepIndex) {
+  if (!Number.isInteger(stepIndex) || stepIndex < 0 || stepIndex >= steps.length) {
+    return;
+  }
+
+  if (!confirm('确定要删除这条步骤吗？')) {
+    return;
+  }
+
+  const nextSteps = steps.filter((_, index) => index !== stepIndex);
+  chrome.storage.local.set({ steps: nextSteps }, () => {
+    steps = nextSteps;
     renderSteps();
   });
 }
@@ -279,6 +307,21 @@ function renderSteps() {
       </div>
       ${step.screenshot ? `<img class="step-screenshot" src="${step.screenshot}" alt="步骤截图">` : ''}
     `;
+
+    const stepActions = document.createElement('div');
+    stepActions.className = 'step-actions';
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'step-delete-btn';
+    deleteButton.textContent = '删除';
+    deleteButton.title = '删除此步骤';
+    deleteButton.addEventListener('click', () => {
+      deleteStep(index);
+    });
+
+    stepActions.appendChild(deleteButton);
+    stepElement.appendChild(stepActions);
 
     stepsContainer.appendChild(stepElement);
   });
@@ -341,6 +384,7 @@ async function exportSteps(format) {
 function prepareExportAssets(sourceSteps) {
   const stepsForDocument = sourceSteps.map((step) => ({ ...step }));
   const imageFiles = [];
+  const usedImageFilenames = new Set();
 
   stepsForDocument.forEach((step, index) => {
     if (!isImageDataUrl(step.screenshot)) {
@@ -348,7 +392,7 @@ function prepareExportAssets(sourceSteps) {
     }
 
     const extension = getImageExtension(step.screenshot);
-    const imageFilename = `step-${index + 1}.${extension}`;
+    const imageFilename = buildExportImageFilename(step, index, extension, usedImageFilenames);
     const relativePath = `images/${imageFilename}`;
 
     imageFiles.push({
@@ -363,6 +407,35 @@ function prepareExportAssets(sourceSteps) {
     stepsForDocument,
     imageFiles
   };
+}
+
+function buildExportImageFilename(step, index, extension, usedImageFilenames) {
+  const rawTimestamp = typeof step.timestamp === 'string' ? step.timestamp : '';
+  const rawStepId = typeof step.id === 'string' ? step.id : '';
+
+  const timestampToken = sanitizeFilenameToken(rawTimestamp.replace(/[^0-9]/g, '')) || `${Date.now()}-${index + 1}`;
+  const stepIdToken = sanitizeFilenameToken(rawStepId) || `idx-${index + 1}`;
+  const safeExtension = sanitizeFilenameToken(extension) || 'png';
+
+  let imageFilename = `capture-${timestampToken}-${stepIdToken}.${safeExtension}`;
+  let suffix = 1;
+
+  while (usedImageFilenames.has(imageFilename)) {
+    imageFilename = `capture-${timestampToken}-${stepIdToken}-${suffix}.${safeExtension}`;
+    suffix += 1;
+  }
+
+  usedImageFilenames.add(imageFilename);
+  return imageFilename;
+}
+
+function sanitizeFilenameToken(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+    .slice(0, 64);
 }
 
 function isImageDataUrl(value) {

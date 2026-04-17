@@ -47,7 +47,6 @@
 ├── background.js      # 后台脚本
 ├── content.js         # 内容脚本
 ├── manifest.json      # 插件配置
-├── options.html       # 选项页面
 ├── popup.html         # 弹出面板
 ├── popup.js           # 弹出面板逻辑
 ├── styles.css         # 样式文件
