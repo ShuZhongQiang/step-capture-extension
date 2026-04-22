@@ -1,46 +1,21 @@
-const DEFAULT_STATE = {
-  steps: [],
-  isRecording: false,
-  recordingTabId: null,
-  recordingMode: 'auto'
-};
+importScripts(
+  'background/asset-store.js',
+  'background/session-store.js',
+  'background/migration.js'
+);
 
-const stepWriteLocks = new Map();
+let migrationPromise = null;
 
-function getStorage(keys) {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(keys, resolve);
-  });
-}
-
-function setStorage(data) {
-  return new Promise((resolve) => {
-    chrome.storage.local.set(data, resolve);
-  });
-}
-
-async function acquireStepLock(stepId, tabId) {
-  const lockKey = `${stepId}:${tabId}`;
-  if (stepWriteLocks.has(lockKey)) {
-    return false;
+function ensureMigrationsReady() {
+  if (!migrationPromise) {
+    migrationPromise = runMigrationsIfNeeded().catch((error) => {
+      console.error('[migration] failed:', error);
+      migrationPromise = null;
+      throw error;
+    });
   }
-  stepWriteLocks.set(lockKey, true);
-  return true;
-}
 
-function releaseStepLock(stepId, tabId) {
-  const lockKey = `${stepId}:${tabId}`;
-  stepWriteLocks.delete(lockKey);
-}
-
-async function getRecorderState() {
-  const state = await getStorage(['steps', 'isRecording', 'recordingTabId', 'recordingMode']);
-  return {
-    steps: Array.isArray(state.steps) ? state.steps : [],
-    isRecording: state.isRecording === true,
-    recordingTabId: typeof state.recordingTabId === 'number' ? state.recordingTabId : null,
-    recordingMode: state.recordingMode || 'auto'
-  };
+  return migrationPromise;
 }
 
 function sendMessageToTab(tabId, message) {
@@ -58,18 +33,6 @@ function sendMessageToTab(tabId, message) {
 
       resolve(true);
     });
-  });
-}
-
-async function setManualConfirmMode(tabId, enabled) {
-  const state = await getRecorderState();
-  if (state.recordingTabId !== tabId) {
-    return false;
-  }
-
-  return sendMessageToTab(tabId, {
-    action: 'setManualConfirmMode',
-    enabled
   });
 }
 
@@ -119,6 +82,38 @@ function queryTabs(queryInfo) {
   });
 }
 
+function getTabById(tabId) {
+  return new Promise((resolve) => {
+    if (typeof tabId !== 'number') {
+      resolve(null);
+      return;
+    }
+
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+
+      resolve(tab || null);
+    });
+  });
+}
+
+function respondWithPromise(sendResponse, promise) {
+  promise
+    .then((result) => {
+      sendResponse(result);
+    })
+    .catch((error) => {
+      console.error('[background] action failed:', error);
+      sendResponse({
+        ok: false,
+        error: error && error.message ? error.message : 'unknown_error'
+      });
+    });
+}
+
 async function getBestActiveTab() {
   const preferred = await queryTabs({ active: true, lastFocusedWindow: true });
   const preferredWeb = preferred.filter(isWebTab);
@@ -143,12 +138,27 @@ async function getBestActiveTab() {
   return anyWeb[0] || null;
 }
 
-async function startRecording(tabId) {
-  console.log('[startRecording] tabId:', tabId);
-  await setStorage({
-    isRecording: true,
-    recordingTabId: tabId
+async function getRecorderState() {
+  await ensureMigrationsReady();
+  return getRecordingState();
+}
+
+async function setManualConfirmMode(tabId, enabled) {
+  const state = await getRecorderState();
+  if (state.recordingTabId !== tabId) {
+    return false;
+  }
+
+  return sendMessageToTab(tabId, {
+    action: 'setManualConfirmMode',
+    enabled
   });
+}
+
+async function startRecording(tabId) {
+  await ensureMigrationsReady();
+  const activeTab = await getTabById(tabId);
+  const session = await startRecordingSession(tabId, activeTab ? activeTab.windowId : null);
 
   let success = await sendMessageToTab(tabId, { action: 'startRecording' });
   if (!success) {
@@ -159,144 +169,83 @@ async function startRecording(tabId) {
     }
   }
 
-  console.log('[startRecording] send to tab result:', success);
+  if (success) {
+    await sendMessageToTab(tabId, {
+      action: 'setManualConfirmMode',
+      enabled: session.mode === 'manual'
+    });
+  } else {
+    await stopRecordingSession();
+  }
+
+  return success;
 }
 
 async function stopRecording(tabId) {
+  await ensureMigrationsReady();
   const state = await getRecorderState();
   const targetTabId = state.recordingTabId !== null ? state.recordingTabId : tabId;
 
-  await setStorage({
-    isRecording: false,
-    recordingTabId: null
-  });
-
+  await stopRecordingSession();
   await sendMessageToTab(targetTabId, { action: 'stopRecording' });
 }
 
-async function commitCapturedStep(message, sender) {
+async function handleCommitCapturedStep(message, sender) {
   if (!message || !message.step) {
     console.error('[commitCapturedStep] invalid message or missing step');
     return { ok: false, error: 'invalid_message' };
   }
 
-  const state = await getRecorderState();
-  const senderTabId = sender.tab ? sender.tab.id : null;
-
-  if (!state.isRecording) {
-    console.warn('[commitCapturedStep] recording not active');
-    return { ok: false, error: 'not_recording' };
-  }
-
-  if (senderTabId !== state.recordingTabId) {
-    console.warn('[commitCapturedStep] tabId mismatch');
-    return { ok: false, error: 'tab_mismatch' };
-  }
-
-  const incomingId = message.step.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  const lockAcquired = await acquireStepLock(incomingId, senderTabId);
-  if (!lockAcquired) {
-    console.log('[commitCapturedStep] concurrent write detected, skipping:', incomingId);
-    return { ok: true, stepId: incomingId, deduplicated: true };
-  }
-
-  try {
-    const freshState = await getRecorderState();
-    const exists = freshState.steps.some(
-      (step) => step.id === incomingId && step.tabId === senderTabId
-    );
-
-    if (exists) {
-      console.log('[commitCapturedStep] step already exists, skipping:', incomingId);
-      return { ok: true, stepId: incomingId, deduplicated: true };
-    }
-
-    const step = {
-      id: incomingId,
-      actionType: message.step.actionType || message.step.type || 'click',
-      type: message.step.type || message.step.actionType || 'click',
-      selector: message.step.selector || (message.step.target && message.step.target.selector) || '',
-      text: message.step.text || (message.step.target && message.step.target.text) || '',
-      target: message.step.target || {
-        selector: message.step.selector || '',
-        text: message.step.text || '',
-        tagName: message.step.target && message.step.target.tagName ? message.step.target.tagName : ''
-      },
-      rect: message.step.rect || null,
-      tabId: senderTabId,
-      url: sender.tab ? sender.tab.url : '',
-      title: sender.tab ? sender.tab.title : '',
-      timestamp: new Date().toISOString(),
-      screenshot: message.step.screenshot || null
-    };
-
-    const steps = [...freshState.steps, step];
-    await setStorage({ steps });
-
-    return { ok: true, stepId: incomingId };
-  } finally {
-    releaseStepLock(incomingId, senderTabId);
-  }
-}
-
-async function captureStep(message, sender) {
-  console.warn('[captureStep] deprecated, use commitCapturedStep instead');
-  const result = await commitCapturedStep({
-    step: {
-      id: message.stepId,
-      type: message.type,
-      selector: message.selector,
-      text: message.text,
-      screenshot: message.screenshot || null
-    }
-  }, sender);
-  return result;
-}
-
-async function updateStepScreenshot(message, sender) {
-  if (!message || !message.stepId || !message.screenshot) {
-    console.warn('[updateStepScreenshot] invalid message, missing stepId or screenshot');
-    return { ok: false, error: 'invalid_message' };
-  }
-
-  const state = await getRecorderState();
-  const senderTabId = sender.tab ? sender.tab.id : null;
-
-  if (!state.isRecording) {
-    console.warn('[updateStepScreenshot] recording not active');
-    return { ok: false, error: 'not_recording' };
-  }
-
-  if (senderTabId !== state.recordingTabId) {
-    console.warn('[updateStepScreenshot] tabId mismatch');
-    return { ok: false, error: 'tab_mismatch' };
-  }
-
-  let changed = false;
-  const steps = state.steps.map((step) => {
-    if (step.id !== message.stepId) {
-      return step;
-    }
-
-    if (step.tabId !== senderTabId) {
-      return step;
-    }
-
-    changed = true;
-    return {
-      ...step,
-      screenshot: message.screenshot
-    };
+  await ensureMigrationsReady();
+  return commitCapturedStep(message.step, {
+    tabId: sender.tab ? sender.tab.id : null,
+    url: sender.tab ? sender.tab.url : '',
+    title: sender.tab ? sender.tab.title : ''
   });
+}
 
-  if (!changed) {
-    console.warn('[updateStepScreenshot] step not found or tabId mismatch:', message.stepId);
-    return { ok: false, error: 'step_not_found' };
+async function buildPanelStep(step) {
+  let screenshot = null;
+  const primaryAssetId = step.capture && step.capture.primaryAssetId
+    ? step.capture.primaryAssetId
+    : (step.primaryAssetId || null);
+
+  if (primaryAssetId) {
+    const preview = await getAssetPreview(primaryAssetId);
+    screenshot = preview ? preview.dataUrl : null;
   }
 
-  await setStorage({ steps });
-  return { ok: true, stepId: message.stepId };
+  return {
+    ...step,
+    type: step.type || step.actionType || 'click',
+    selector: step.selector || (step.target && step.target.selector) || '',
+    text: step.text || (step.target && step.target.text) || '',
+    url: step.url || (step.page && step.page.url) || '',
+    title: step.title || (step.page && step.page.title) || '',
+    screenshot
+  };
+}
+
+async function buildPanelState() {
+  await ensureMigrationsReady();
+  const [state, activeSession] = await Promise.all([
+    getRecorderState(),
+    getActiveSession()
+  ]);
+
+  if (!activeSession) {
+    return {
+      ...state,
+      steps: []
+    };
+  }
+
+  const steps = await listSessionSteps(activeSession.id);
+  return {
+    ...state,
+    sessionId: activeSession.id,
+    steps: await Promise.all(steps.map((step) => buildPanelStep(step)))
+  };
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -323,62 +272,93 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === 'getActiveTab') {
     getBestActiveTab().then((tab) => {
-      if (tab) {
-        console.log('[getActiveTab] selected:', tab.url, 'id:', tab.id);
-      } else {
-        console.log('[getActiveTab] no recordable tab found');
-      }
-
       sendResponse({ tab: tab || null });
     });
-
     return true;
   }
 
   if (message.action === 'getState') {
-    getRecorderState().then((state) => {
-      sendResponse(state);
-    });
-    return true;
-  }
-
-  if (message.action === 'startRecording') {
-    startRecording(message.tabId).then(() => sendResponse({ ok: true }));
-    return true;
-  }
-
-  if (message.action === 'setManualConfirmMode') {
-    setManualConfirmMode(message.tabId, message.enabled).then(() => sendResponse({ ok: true }));
-    return true;
-  }
-
-  if (message.action === 'stopRecording') {
-    stopRecording(message.tabId).then(() => sendResponse({ ok: true }));
-    return true;
-  }
-
-  if (message.action === 'captureStep') {
-    captureStep(message, sender).then((result) => sendResponse(result));
-    return true;
-  }
-
-  if (message.action === 'commitCapturedStep') {
-    commitCapturedStep(message, sender).then((result) => sendResponse(result));
-    return true;
-  }
-
-  if (message.action === 'updateStepScreenshot') {
-    updateStepScreenshot(message, sender).then((result) => sendResponse(result));
+    respondWithPromise(sendResponse, buildPanelState());
     return true;
   }
 
   if (message.action === 'getRecordingState') {
-    getRecorderState().then((state) => {
-      sendResponse({
+    respondWithPromise(sendResponse, getRecorderState().then((state) => ({
         isRecording: state.isRecording,
-        recordingTabId: state.recordingTabId
-      });
-    });
+        recordingTabId: state.recordingTabId,
+        recordingMode: state.recordingMode
+      })));
+    return true;
+  }
+
+  if (message.action === 'startRecording') {
+    respondWithPromise(sendResponse, startRecording(message.tabId).then((ok) => ({ ok })));
+    return true;
+  }
+
+  if (message.action === 'stopRecording') {
+    respondWithPromise(sendResponse, stopRecording(message.tabId).then(() => ({ ok: true })));
+    return true;
+  }
+
+  if (message.action === 'setManualConfirmMode') {
+    respondWithPromise(sendResponse, setManualConfirmMode(message.tabId, message.enabled).then((ok) => ({ ok })));
+    return true;
+  }
+
+  if (message.action === 'updateRecordingMode') {
+    respondWithPromise(sendResponse, ensureMigrationsReady()
+      .then(() => updateRecordingMode(message.mode))
+      .then(async () => {
+        const state = await getRecorderState();
+        if (typeof state.recordingTabId === 'number') {
+          await sendMessageToTab(state.recordingTabId, {
+            action: 'setManualConfirmMode',
+            enabled: state.recordingMode === 'manual'
+          });
+        }
+        return { ok: true };
+      }));
+    return true;
+  }
+
+  if (message.action === 'captureStep') {
+    respondWithPromise(sendResponse, handleCommitCapturedStep({
+      step: {
+        id: message.stepId,
+        type: message.type,
+        selector: message.selector,
+        text: message.text,
+        screenshot: message.screenshot || null
+      }
+    }, sender));
+    return true;
+  }
+
+  if (message.action === 'commitCapturedStep') {
+    respondWithPromise(sendResponse, handleCommitCapturedStep(message, sender));
+    return true;
+  }
+
+  if (message.action === 'updateStepScreenshot') {
+    sendResponse({ ok: false, error: 'deprecated' });
+    return false;
+  }
+
+  if (message.action === 'getAssetPreview') {
+    respondWithPromise(sendResponse, ensureMigrationsReady()
+      .then(() => getAssetPreview(message.assetId))
+      .then((asset) => ({ asset })));
+    return true;
+  }
+
+  if (message.action === 'deleteStep') {
+    respondWithPromise(sendResponse, ensureMigrationsReady().then(() => deleteStep(message.stepId)));
+    return true;
+  }
+
+  if (message.action === 'clearSteps') {
+    respondWithPromise(sendResponse, ensureMigrationsReady().then(() => clearActiveSessionSteps()));
     return true;
   }
 
@@ -409,8 +389,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
         enabled: state.recordingMode === 'manual'
       });
     }
-
-    console.log('[tabs.onUpdated] resume recording result:', success);
+  }).catch((error) => {
+    console.error('[tabs.onUpdated] failed to resume recorder:', error);
   });
 });
 
@@ -420,24 +400,20 @@ chrome.tabs.onRemoved.addListener((tabId) => {
       return;
     }
 
-    setStorage({
-      isRecording: false,
-      recordingTabId: null
+    stopRecordingSession().catch((error) => {
+      console.error('[tabs.onRemoved] failed to stop recorder:', error);
     });
-  });
+  }).catch(() => {});
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const current = await getStorage(['steps', 'isRecording', 'recordingTabId', 'recordingMode']);
-
-  await setStorage({
-    steps: Array.isArray(current.steps) ? current.steps : DEFAULT_STATE.steps,
-    isRecording: typeof current.isRecording === 'boolean' ? current.isRecording : DEFAULT_STATE.isRecording,
-    recordingTabId: typeof current.recordingTabId === 'number' ? current.recordingTabId : DEFAULT_STATE.recordingTabId,
-    recordingMode: current.recordingMode || DEFAULT_STATE.recordingMode
-  });
-
+  await ensureMigrationsReady();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
 
+chrome.runtime.onStartup.addListener(() => {
+  ensureMigrationsReady().catch(() => {});
+});
+
+ensureMigrationsReady().catch(() => {});
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});

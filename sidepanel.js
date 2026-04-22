@@ -40,7 +40,12 @@ function loadJszipLibrary() {
 }
 
 function loadState() {
-  chrome.storage.local.get(['steps', 'isRecording', 'recordingMode'], (result) => {
+  chrome.runtime.sendMessage({ action: 'getState' }, (result) => {
+    if (chrome.runtime.lastError || !result) {
+      console.error('[loadState] failed:', chrome.runtime.lastError);
+      return;
+    }
+
     steps = Array.isArray(result.steps) ? result.steps : [];
     isRecording = result.isRecording === true;
     recordingMode = result.recordingMode || 'auto';
@@ -118,19 +123,10 @@ function setupStorageListeners() {
       return;
     }
 
-    if (changes.steps) {
-      steps = Array.isArray(changes.steps.newValue) ? changes.steps.newValue : [];
-      renderSteps();
-    }
-
-    if (changes.isRecording) {
-      isRecording = changes.isRecording.newValue === true;
-      updateUI();
-    }
-
-    if (changes.recordingMode) {
-      recordingMode = changes.recordingMode.newValue || 'auto';
-      updateModeUI();
+    const changedKeys = Object.keys(changes);
+    const shouldReload = changedKeys.some((key) => key.startsWith('recorder:'));
+    if (shouldReload) {
+      loadState();
     }
   });
 }
@@ -194,7 +190,10 @@ function startRecording() {
     };
 
     if (shouldClearSteps) {
-      chrome.storage.local.set({ steps: [] }, () => {
+      chrome.runtime.sendMessage({ action: 'clearSteps' }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('[clearSteps before start] failed:', chrome.runtime.lastError);
+        }
         steps = [];
         renderSteps();
         startRecordingSession();
@@ -236,7 +235,12 @@ function clearSteps() {
     return;
   }
 
-  chrome.storage.local.set({ steps: [] }, () => {
+  chrome.runtime.sendMessage({ action: 'clearSteps' }, (response) => {
+    if (chrome.runtime.lastError || !response || response.ok === false) {
+      console.error('[clearSteps] failed:', chrome.runtime.lastError || response);
+      return;
+    }
+
     steps = [];
     renderSteps();
   });
@@ -251,8 +255,14 @@ function deleteStep(stepIndex) {
     return;
   }
 
-  const nextSteps = steps.filter((_, index) => index !== stepIndex);
-  chrome.storage.local.set({ steps: nextSteps }, () => {
+  const step = steps[stepIndex];
+  chrome.runtime.sendMessage({ action: 'deleteStep', stepId: step.id }, (response) => {
+    if (chrome.runtime.lastError || !response || response.ok === false) {
+      console.error('[deleteStep] failed:', chrome.runtime.lastError || response);
+      return;
+    }
+
+    const nextSteps = steps.filter((_, index) => index !== stepIndex);
     steps = nextSteps;
     renderSteps();
   });
@@ -260,22 +270,13 @@ function deleteStep(stepIndex) {
 
 function handleModeChange(event) {
   recordingMode = event.target.value;
-  chrome.storage.local.set({ recordingMode }, () => {
-    chrome.runtime.sendMessage({ action: 'getState' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.isRecording || typeof response.recordingTabId !== 'number') {
-        return;
-      }
+  chrome.runtime.sendMessage({ action: 'updateRecordingMode', mode: recordingMode }, (response) => {
+    if (chrome.runtime.lastError || !response || response.ok === false) {
+      console.error('[handleModeChange] failed to update mode:', chrome.runtime.lastError || response);
+      return;
+    }
 
-      chrome.runtime.sendMessage({
-        action: 'setManualConfirmMode',
-        tabId: response.recordingTabId,
-        enabled: recordingMode === 'manual'
-      }, () => {
-        if (chrome.runtime.lastError) {
-          console.error('[handleModeChange] failed to sync mode:', chrome.runtime.lastError);
-        }
-      });
-    });
+    loadState();
   });
 }
 

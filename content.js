@@ -3,7 +3,9 @@ let isManualConfirmMode = false;
 let overlay = null;
 let pendingManualAction = null;
 let isReplayingClick = false;
+let runtimeMessageListener = null;
 const RECORDER_STYLE_ID = 'step-recorder-content-styles';
+const RECORDER_RUNTIME_KEY = '__stepRecorderRuntime__';
 const NATIVE_CAPTURE_RETRIES = 2;
 const NATIVE_CAPTURE_RETRY_DELAY_MS = 80;
 const STRONG_INTERACTIVE_SELECTOR = 'a,button,input,textarea,select,option,[role="button"],[role="link"],[contenteditable="true"]';
@@ -18,10 +20,11 @@ const HIGHLIGHT_THEME = {
 };
 
 function init() {
+  registerRuntimeInstance();
   ensureRecorderStyles();
   createOverlay();
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  runtimeMessageListener = (message, sender, sendResponse) => {
     if (message.action === 'startRecording') {
       startRecording();
       sendResponse({ ok: true });
@@ -47,9 +50,99 @@ function init() {
     }
 
     return false;
-  });
+  };
+
+  chrome.runtime.onMessage.addListener(runtimeMessageListener);
 
   document.addEventListener('keydown', handleKeyDown);
+}
+
+function registerRuntimeInstance() {
+  const existingRuntime = window[RECORDER_RUNTIME_KEY];
+  if (existingRuntime && typeof existingRuntime.cleanup === 'function') {
+    try {
+      existingRuntime.cleanup();
+    } catch (error) {
+      console.warn('[runtime] failed to cleanup previous recorder instance:', error);
+    }
+  }
+
+  window[RECORDER_RUNTIME_KEY] = {
+    cleanup: cleanupRuntimeInstance
+  };
+}
+
+function cleanupRuntimeInstance() {
+  stopRecording();
+  document.removeEventListener('keydown', handleKeyDown);
+
+  if (runtimeMessageListener && chrome.runtime && chrome.runtime.onMessage) {
+    try {
+      chrome.runtime.onMessage.removeListener(runtimeMessageListener);
+    } catch (error) {
+      console.warn('[runtime] failed to remove message listener:', error);
+    }
+  }
+
+  runtimeMessageListener = null;
+  removeConfirmOverlay();
+  clearHighlights();
+
+  if (overlay && overlay.parentNode) {
+    overlay.parentNode.removeChild(overlay);
+  }
+
+  overlay = null;
+
+  if (window[RECORDER_RUNTIME_KEY] && window[RECORDER_RUNTIME_KEY].cleanup === cleanupRuntimeInstance) {
+    delete window[RECORDER_RUNTIME_KEY];
+  }
+}
+
+function handleRuntimeInvalidation(error) {
+  const errorMessage = error && error.message ? error.message : String(error || '');
+  if (!errorMessage.includes('Extension context invalidated')) {
+    return;
+  }
+
+  console.warn('[runtime] extension context invalidated, disabling recorder');
+  cleanupRuntimeInstance();
+}
+
+function safeSendRuntimeMessage(message) {
+  return new Promise((resolve) => {
+    if (!chrome || !chrome.runtime || !chrome.runtime.id) {
+      resolve({ ok: false, error: 'Extension context invalidated.', response: null });
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          handleRuntimeInvalidation(new Error(chrome.runtime.lastError.message || 'runtime_error'));
+          resolve({
+            ok: false,
+            error: chrome.runtime.lastError.message || 'runtime_error',
+            response: null
+          });
+          return;
+        }
+
+        resolve({
+          ok: true,
+          error: null,
+          response: response || null
+        });
+      });
+    } catch (error) {
+      handleRuntimeInvalidation(error);
+      resolve({
+        ok: false,
+        error: error && error.message ? error.message : 'runtime_error',
+        response: null
+      });
+    }
+  });
 }
 
 
@@ -275,7 +368,7 @@ async function handleClick(event) {
   }
 
   try {
-    chrome.runtime.sendMessage({
+    const result = await safeSendRuntimeMessage({
       action: 'commitCapturedStep',
       step: {
         id: stepId,
@@ -289,16 +382,14 @@ async function handleClick(event) {
         rect: getElementRect(target),
         screenshot
       }
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('[commitCapturedStep] failed:', chrome.runtime.lastError);
-        return;
-      }
-      if (response && response.ok) {
-        return;
-      }
     });
+
+    if (!result.ok) {
+      handleRuntimeInvalidation(new Error(result.error || 'runtime_error'));
+      console.error('[commitCapturedStep] failed:', result.error);
+    }
   } catch (error) {
+    handleRuntimeInvalidation(error);
     console.error('[commitCapturedStep] error:', error);
   }
 }
@@ -585,7 +676,7 @@ async function handleConfirmStep(stepId, save) {
   }
 
   const targetElement = pendingManualAction ? pendingManualAction.resolvedTarget : null;
-  chrome.runtime.sendMessage({
+  const result = await safeSendRuntimeMessage({
     action: 'commitCapturedStep',
     step: {
       id: stepId,
@@ -599,15 +690,12 @@ async function handleConfirmStep(stepId, save) {
       rect: targetElement ? getElementRect(targetElement) : highlightRect,
       screenshot
     }
-  }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error('[commitCapturedStep] failed:', chrome.runtime.lastError);
-      return;
-    }
-    if (response && response.ok) {
-      return;
-    }
   });
+
+  if (!result.ok) {
+    handleRuntimeInvalidation(new Error(result.error || 'runtime_error'));
+    console.error('[commitCapturedStep] failed:', result.error);
+  }
 
   replayPendingManualAction();
 }
@@ -851,15 +939,16 @@ async function captureVisibleTabWithRetry() {
 
 function captureVisibleTab() {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'captureTab' }, (response) => {
-      if (chrome.runtime.lastError) {
-        resolve({ screenshot: null, error: chrome.runtime.lastError.message || 'runtime_error' });
+    safeSendRuntimeMessage({ action: 'captureTab' }).then((result) => {
+      if (!result.ok) {
+        handleRuntimeInvalidation(new Error(result.error || 'runtime_error'));
+        resolve({ screenshot: null, error: result.error || 'runtime_error' });
         return;
       }
 
       resolve({
-        screenshot: response && response.screenshot ? response.screenshot : null,
-        error: response && response.error ? response.error : null
+        screenshot: result.response && result.response.screenshot ? result.response.screenshot : null,
+        error: result.response && result.response.error ? result.response.error : null
       });
     });
   });
