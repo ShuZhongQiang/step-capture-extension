@@ -21,7 +21,7 @@
   function previewMarkup(step) {
     const preview = step.preview || {};
     if (preview.dataUrl) {
-      return '<img class="step-screenshot" src="' + escapeHtml(preview.dataUrl) + '" alt="步骤截图">';
+      return '<img class="step-screenshot step-screenshot--interactive" src="' + escapeHtml(preview.dataUrl) + '" alt="步骤截图" title="点击预览" data-preview-open-step-id="' + escapeHtml(step.id) + '">';
     }
 
     if (preview.status === 'loading') {
@@ -79,7 +79,26 @@
       if (previewLoadButton) {
         previewLoadButton.addEventListener('click', function onPreviewLoad() {
           if (typeof opts.onLoadPreview === 'function') {
-            opts.onLoadPreview(step);
+            const result = opts.onLoadPreview(step);
+            if (result && typeof result.catch === 'function') {
+              result.catch(function onLoadError(error) {
+                console.error('[step-list] preview load failed:', error);
+              });
+            }
+          }
+        });
+      }
+
+      const previewOpenTrigger = stepElement.querySelector('[data-preview-open-step-id]');
+      if (previewOpenTrigger) {
+        previewOpenTrigger.addEventListener('click', function onPreviewOpen() {
+          if (typeof opts.onOpenPreview === 'function') {
+            const result = opts.onOpenPreview(step);
+            if (result && typeof result.catch === 'function') {
+              result.catch(function onOpenError(error) {
+                console.error('[step-list] preview open failed:', error);
+              });
+            }
           }
         });
       }

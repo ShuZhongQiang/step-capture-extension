@@ -21,6 +21,11 @@
     RUNTIME_CONFIGURE: 'recorder/runtime/configure'
   });
 
+  const PANEL_TO_CONTENT = Object.freeze({
+    IMAGE_PREVIEW_SHOW: 'recorder/panel/preview/show',
+    IMAGE_PREVIEW_HIDE: 'recorder/panel/preview/hide'
+  });
+
   const EVENT = Object.freeze({
     SNAPSHOT: 'recorder/event/snapshot',
     SESSION_UPDATED: 'recorder/event/sessionUpdated',
@@ -34,6 +39,7 @@
     COMMAND: COMMAND,
     CONTENT_TO_BACKGROUND: CONTENT_TO_BACKGROUND,
     BACKGROUND_TO_CONTENT: BACKGROUND_TO_CONTENT,
+    PANEL_TO_CONTENT: PANEL_TO_CONTENT,
     EVENT: EVENT
   });
 })(typeof self !== 'undefined' ? self : window);

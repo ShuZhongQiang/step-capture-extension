@@ -5,6 +5,7 @@
   const STRONG_INTERACTIVE_SELECTOR = 'a,button,input,textarea,select,option,[role="button"],[role="link"],[contenteditable="true"]';
   const CARD_LIKE_PATTERN = /(card|item|panel|tile|list|row|cell|module|block|box|content)/i;
   const BUTTON_LIKE_PATTERN = /(btn|button)/i;
+  let activePreview = null;
 
   function registerRuntimeInstance() {
     const existing = window[RECORDER_RUNTIME_KEY];
@@ -23,6 +24,7 @@
 
   function cleanupRuntimeInstance() {
     stopRuntime();
+    hideImagePreview();
 
     const state = getRuntimeState();
     if (state.runtimeMessageListener && chrome.runtime && chrome.runtime.onMessage) {
@@ -68,6 +70,12 @@
       '.confirm-cancel{background:#fff;color:#475569;box-shadow:4px 4px 10px rgba(148,163,184,0.2);}',
       '.confirm-btn:hover{transform:translateY(-1px);}',
       '.confirm-btn:active{transform:translateY(0);}',
+      '.step-preview-overlay{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,0.42);backdrop-filter:blur(3px);}',
+      '.step-preview-dialog{position:relative;background:#e8ecf1;border-radius:16px;box-shadow:8px 8px 16px rgba(163,177,198,0.62),-8px -8px 16px rgba(255,255,255,0.82);padding:12px;width:min(92vw,980px);max-height:88vh;display:flex;flex-direction:column;gap:10px;}',
+      '.step-preview-close{align-self:flex-end;border:none;background:#e8ecf1;color:#64748b;font-size:12px;font-weight:600;padding:5px 10px;border-radius:10px;cursor:pointer;box-shadow:2px 2px 4px rgba(163,177,198,0.45),-2px -2px 4px rgba(255,255,255,0.7);}',
+      '.step-preview-image-wrap{min-height:220px;display:flex;align-items:center;justify-content:center;}',
+      '.step-preview-image{max-width:100%;max-height:min(70vh,760px);border-radius:12px;object-fit:contain;background:#dfe5ec;box-shadow:inset 3px 3px 6px rgba(163,177,198,0.45),inset -3px -3px 6px rgba(255,255,255,0.75);}',
+      '.step-preview-caption{text-align:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
       '@keyframes step-recorder-pulse{0%,100%{box-shadow:0 0 0 1.5px rgba(249,115,22,0.32),0 0 10px 3px rgba(249,115,22,0.14),0 0 20px 6px rgba(249,115,22,0.08);}50%{box-shadow:0 0 0 2px rgba(249,115,22,0.48),0 0 18px 6px rgba(249,115,22,0.24),0 0 32px 10px rgba(249,115,22,0.12);}}'
     ].join('');
 
@@ -86,6 +94,91 @@
     document.documentElement.appendChild(overlay);
 
     setRuntimeState({ overlay: overlay });
+  }
+
+  function hideImagePreview() {
+    if (!activePreview) {
+      return;
+    }
+
+    if (activePreview.keydownListener) {
+      document.removeEventListener('keydown', activePreview.keydownListener, true);
+    }
+
+    if (activePreview.overlay && activePreview.overlay.parentNode) {
+      activePreview.overlay.parentNode.removeChild(activePreview.overlay);
+    }
+
+    activePreview = null;
+  }
+
+  function showImagePreview(payload) {
+    if (!payload || !payload.dataUrl) {
+      return { ok: false, error: 'invalid_preview_payload' };
+    }
+
+    hideImagePreview();
+
+    const caption = payload.caption ? String(payload.caption) : '步骤截图预览';
+    const sizeText = payload.width && payload.height ? ' (' + payload.width + 'x' + payload.height + ')' : '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'step-preview-overlay';
+    overlay.setAttribute('data-step-recorder-ui', 'true');
+
+    const dialog = document.createElement('div');
+    dialog.className = 'step-preview-dialog';
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'step-preview-close';
+    closeButton.textContent = '关闭';
+
+    const imageWrap = document.createElement('div');
+    imageWrap.className = 'step-preview-image-wrap';
+
+    const image = document.createElement('img');
+    image.className = 'step-preview-image';
+    image.src = payload.dataUrl;
+    image.alt = '步骤截图预览';
+
+    const captionElement = document.createElement('div');
+    captionElement.className = 'step-preview-caption';
+    captionElement.textContent = caption + sizeText;
+    captionElement.title = caption + sizeText;
+
+    imageWrap.appendChild(image);
+    dialog.appendChild(closeButton);
+    dialog.appendChild(imageWrap);
+    dialog.appendChild(captionElement);
+    overlay.appendChild(dialog);
+    document.documentElement.appendChild(overlay);
+
+    function closePreview() {
+      hideImagePreview();
+    }
+
+    const keydownListener = function onPreviewKeydown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closePreview();
+      }
+    };
+
+    overlay.addEventListener('click', function onOverlayClick(event) {
+      if (!dialog.contains(event.target)) {
+        closePreview();
+      }
+    });
+    closeButton.addEventListener('click', closePreview);
+    document.addEventListener('keydown', keydownListener, true);
+
+    activePreview = {
+      overlay: overlay,
+      keydownListener: keydownListener
+    };
+
+    return { ok: true };
   }
 
   function clearHighlights() {
@@ -520,6 +613,17 @@
 
     if (message && message.type === messages.BACKGROUND_TO_CONTENT.RUNTIME_CONFIGURE) {
       configureRuntime(message.payload || {});
+      sendResponse({ ok: true });
+      return false;
+    }
+
+    if (message && message.type === messages.PANEL_TO_CONTENT.IMAGE_PREVIEW_SHOW) {
+      sendResponse(showImagePreview(message.payload || {}));
+      return false;
+    }
+
+    if (message && message.type === messages.PANEL_TO_CONTENT.IMAGE_PREVIEW_HIDE) {
+      hideImagePreview();
       sendResponse({ ok: true });
       return false;
     }

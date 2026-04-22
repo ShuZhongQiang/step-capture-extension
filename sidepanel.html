@@ -24,10 +24,20 @@
       <div id="recording-status" class="status">就绪</div>
     </div>
 
-    <div class="session-section">
-      <h2>当前 Session</h2>
-      <div id="session-overview" class="session-overview">
-        <div class="overview-empty">当前没有活动会话</div>
+    <div class="meta-grid">
+      <div class="session-section compact-section">
+        <h2>当前 Session</h2>
+        <div id="session-overview" class="session-overview">
+          <div class="overview-empty">当前没有活动会话</div>
+        </div>
+      </div>
+
+      <div class="document-section compact-section">
+        <h2>文档状态</h2>
+        <div class="document-row">
+          <div id="document-status" class="doc-status doc-status--idle" title="文档尚未构建">未构建</div>
+          <button id="ai-generate" class="neo-btn neo-btn-secondary neo-btn-sm">AI 生成</button>
+        </div>
       </div>
     </div>
 
@@ -36,13 +46,17 @@
       <div class="mode-options">
         <label class="mode-option">
           <input type="radio" name="recording-mode" value="auto" checked>
-          <span class="mode-label">自动模式</span>
-          <span class="mode-desc">点击后自动截图并保存</span>
+          <span class="mode-copy">
+            <span class="mode-label">自动模式</span>
+            <span class="mode-desc">点击后自动截图并保存</span>
+          </span>
         </label>
         <label class="mode-option">
           <input type="radio" name="recording-mode" value="manual">
-          <span class="mode-label">手动确认模式</span>
-          <span class="mode-desc">高亮后确认是否保存</span>
+          <span class="mode-copy">
+            <span class="mode-label">手动确认模式</span>
+            <span class="mode-desc">高亮后确认是否保存</span>
+          </span>
         </label>
       </div>
     </div>
@@ -55,12 +69,6 @@
       <div id="steps-container" class="steps-container">
         <p class="empty-message">暂无步骤记录</p>
       </div>
-    </div>
-
-    <div class="document-section">
-      <h2>文档状态</h2>
-      <div id="document-status" class="doc-status doc-status--idle">文档尚未构建</div>
-      <button id="ai-generate" class="neo-btn neo-btn-secondary">AI 生成入口</button>
     </div>
 
     <div class="export-section">

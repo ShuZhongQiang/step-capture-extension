@@ -37,7 +37,8 @@ function renderDocumentStatus() {
   const message = panelState.documentMessage || '';
 
   documentStatus.className = 'doc-status doc-status--' + status;
-  documentStatus.textContent = message || (status === 'building' ? '文档构建中...' : '文档尚未构建');
+  documentStatus.textContent = compactDocumentStatusLabel(status);
+  documentStatus.title = message || compactDocumentStatusTitle(status);
 }
 
 function renderSessionOverview() {
@@ -51,11 +52,14 @@ function renderSessionOverview() {
     return;
   }
 
+  const stepCount = Number(session.stepCount) || panelState.steps.length || 0;
+
   sessionOverview.innerHTML = [
-    '<div><strong>Session:</strong> ' + escapeHtml(session.id || '') + '</div>',
-    '<div><strong>状态:</strong> ' + escapeHtml(session.status || '') + '</div>',
-    '<div><strong>模式:</strong> ' + escapeHtml(session.mode || '') + '</div>',
-    '<div><strong>步骤数:</strong> ' + String(session.stepCount || panelState.steps.length || 0) + '</div>'
+    '<div class="session-summary-row">',
+    '<span class="session-chip" title="' + escapeHtml(session.id || '') + '"><span class="session-chip-label">ID</span>' + escapeHtml(compactSessionId(session.id)) + '</span>',
+    '<span class="session-chip"><span class="session-chip-label">状态</span>' + escapeHtml(session.status || 'idle') + '</span>',
+    '<span class="session-chip session-chip--steps"><span class="session-chip-label">步骤</span>' + String(stepCount) + '</span>',
+    '</div>'
   ].join('');
 }
 
@@ -97,7 +101,8 @@ function updateStatusUI() {
 function renderStepsView() {
   renderSteps(stepsContainer, panelState.steps, {
     onDeleteStep: handleDeleteStep,
-    onLoadPreview: handleLoadPreview
+    onLoadPreview: handleLoadPreview,
+    onOpenPreview: handleOpenPreview
   });
 }
 
@@ -289,6 +294,33 @@ async function handleLoadPreview(step) {
   }
 }
 
+async function handleOpenPreview(step) {
+  if (!step || !step.id) {
+    return;
+  }
+
+  let currentStep = step;
+
+  if (!currentStep.preview || !currentStep.preview.dataUrl) {
+    await handleLoadPreview(step);
+    currentStep = panelState.steps.find(function findStep(item) {
+      return item.id === step.id;
+    }) || currentStep;
+  }
+
+  if (!currentStep.preview || !currentStep.preview.dataUrl) {
+    return;
+  }
+
+  try {
+    await showImagePreviewOnActivePage(currentStep);
+  } catch (error) {
+    console.error('[preview page overlay] failed:', error);
+    alert('网页预览打开失败，请确认当前页面可注入内容脚本并重试。');
+    throw error;
+  }
+}
+
 function ensureIdlePreviews() {
   panelState.steps.forEach(function eachStep(step) {
     if (!step || !step.preview || !step.preview.assetId) {
@@ -437,6 +469,85 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function compactSessionId(sessionId) {
+  const text = String(sessionId || '');
+  if (text.length <= 12) {
+    return text || '-';
+  }
+
+  return text.slice(0, 6) + '...' + text.slice(-4);
+}
+
+function compactDocumentStatusLabel(status) {
+  if (status === 'building') {
+    return '构建中';
+  }
+
+  if (status === 'ready') {
+    return '已就绪';
+  }
+
+  if (status === 'failed') {
+    return '构建失败';
+  }
+
+  return '未构建';
+}
+
+function compactDocumentStatusTitle(status) {
+  if (status === 'building') {
+    return '文档构建中';
+  }
+
+  if (status === 'ready') {
+    return '文档已就绪';
+  }
+
+  if (status === 'failed') {
+    return '文档构建失败';
+  }
+
+  return '文档尚未构建';
+}
+
+async function showImagePreviewOnActivePage(step) {
+  const activeTab = await getActiveTab();
+  if (!activeTab || typeof activeTab.id !== 'number') {
+    throw new Error('active_tab_not_found');
+  }
+
+  const target = step.target || {};
+  const title = target.text || target.ariaLabel || target.placeholder || target.dataTestId || '点击元素';
+
+  const result = await new Promise(function resolveSend(resolve, reject) {
+    chrome.tabs.sendMessage(
+      activeTab.id,
+      {
+        type: messages.PANEL_TO_CONTENT.IMAGE_PREVIEW_SHOW,
+        payload: {
+          dataUrl: step.preview.dataUrl,
+          caption: title,
+          width: step.preview.width || null,
+          height: step.preview.height || null
+        }
+      },
+      { frameId: 0 },
+      function onResponse(response) {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message || 'send_preview_failed'));
+          return;
+        }
+
+        resolve(response || { ok: true });
+      }
+    );
+  });
+
+  if (!result || result.ok === false) {
+    throw new Error(result && result.error ? result.error : 'preview_show_failed');
+  }
 }
 
 function init() {
