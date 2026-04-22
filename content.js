@@ -279,9 +279,14 @@ async function handleClick(event) {
       action: 'commitCapturedStep',
       step: {
         id: stepId,
+        actionType: 'click',
         type: 'click',
-        selector,
-        text,
+        target: {
+          selector,
+          text,
+          tagName: target.tagName.toLowerCase()
+        },
+        rect: getElementRect(target),
         screenshot
       }
     }, (response) => {
@@ -579,13 +584,19 @@ async function handleConfirmStep(stepId, save) {
     return;
   }
 
+  const targetElement = pendingManualAction ? pendingManualAction.resolvedTarget : null;
   chrome.runtime.sendMessage({
     action: 'commitCapturedStep',
     step: {
       id: stepId,
+      actionType: 'click',
       type: 'click',
-      selector,
-      text,
+      target: {
+        selector,
+        text,
+        tagName: targetElement ? targetElement.tagName.toLowerCase() : ''
+      },
+      rect: targetElement ? getElementRect(targetElement) : highlightRect,
       screenshot
     }
   }, (response) => {
@@ -768,6 +779,18 @@ function getElementText(element) {
     element.alt ||
     element.tagName
   );
+}
+
+function getElementRect(element) {
+  const rect = element.getBoundingClientRect();
+  return {
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+    right: Math.round(rect.right),
+    bottom: Math.round(rect.bottom)
+  };
 }
 
 function normalizeText(value) {

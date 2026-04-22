@@ -214,9 +214,16 @@ async function commitCapturedStep(message, sender) {
 
     const step = {
       id: incomingId,
-      type: message.step.type || 'click',
-      selector: message.step.selector || '',
-      text: message.step.text || '',
+      actionType: message.step.actionType || message.step.type || 'click',
+      type: message.step.type || message.step.actionType || 'click',
+      selector: message.step.selector || (message.step.target && message.step.target.selector) || '',
+      text: message.step.text || (message.step.target && message.step.target.text) || '',
+      target: message.step.target || {
+        selector: message.step.selector || '',
+        text: message.step.text || '',
+        tagName: message.step.target && message.step.target.tagName ? message.step.target.tagName : ''
+      },
+      rect: message.step.rect || null,
       tabId: senderTabId,
       url: sender.tab ? sender.tab.url : '',
       title: sender.tab ? sender.tab.title : '',
