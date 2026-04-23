@@ -84,7 +84,7 @@
 ### 技术栈
 - **前端**：原生 HTML + CSS + JavaScript（ES5/ES6）
 - **浏览器扩展**：Chrome Extension Manifest V3
-- **存储方案**：Chrome Storage API（localStorage 的扩展版）
+- **存储方案**：Chrome Storage API
 - **截图功能**：Chrome Tabs API + Canvas 标注
 - **压缩工具**：JSZip
 - **UI 风格**：新拟态（Neumorphism）设计
@@ -163,7 +163,7 @@ Step_Proj_Solo/
 │   ├── steps128.png         # 128x128 图标
 │   └── delete.svg           # 删除图标
 ├── lib/                     # 第三方库
-│   ├── html2canvas.min.js   # 截图库（备用）
+│   ├── html2canvas.min.js   # 截图库（历史遗留，当前未使用）
 │   └── jszip.min.js         # ZIP 压缩库
 ├── background.js            # 后台入口
 ├── content.js               # 内容脚本入口

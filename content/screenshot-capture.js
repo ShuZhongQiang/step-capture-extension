@@ -14,17 +14,36 @@
     });
   }
 
+  function getTopViewportMetrics() {
+    try {
+      const topWindow = window.top || window;
+      const width = Number(topWindow.innerWidth);
+      const height = Number(topWindow.innerHeight);
+      return {
+        viewportWidth: Number.isFinite(width) && width > 0 ? width : window.innerWidth,
+        viewportHeight: Number.isFinite(height) && height > 0 ? height : window.innerHeight
+      };
+    } catch (error) {
+      return {
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight
+      };
+    }
+  }
+
   function convertRectToTopViewport(rect, frameContext) {
+    const topViewport = getTopViewportMetrics();
+
     if (!frameContext || !frameContext.isInFrame) {
       return {
         left: rect.left,
         top: rect.top,
         width: rect.width,
         height: rect.height,
-        viewportWidth: rect.viewportWidth,
-        viewportHeight: rect.viewportHeight,
-        scrollX: rect.scrollX || 0,
-        scrollY: rect.scrollY || 0,
+        viewportWidth: topViewport.viewportWidth,
+        viewportHeight: topViewport.viewportHeight,
+        scrollX: 0,
+        scrollY: 0,
         crossOriginFallback: false
       };
     }
@@ -59,10 +78,10 @@
           top: rect.top,
           width: rect.width,
           height: rect.height,
-          viewportWidth: rect.viewportWidth || window.innerWidth,
-          viewportHeight: rect.viewportHeight || window.innerHeight,
-          scrollX: rect.scrollX || 0,
-          scrollY: rect.scrollY || 0,
+          viewportWidth: topViewport.viewportWidth,
+          viewportHeight: topViewport.viewportHeight,
+          scrollX: 0,
+          scrollY: 0,
           crossOriginFallback: true
         };
       }
@@ -72,10 +91,10 @@
         top: Math.round(rect.top + totalOffsetY),
         width: rect.width,
         height: rect.height,
-        viewportWidth: rect.viewportWidth || (currentWindow ? currentWindow.innerWidth : window.innerWidth),
-        viewportHeight: rect.viewportHeight || (currentWindow ? currentWindow.innerHeight : window.innerHeight),
-        scrollX: (currentWindow ? currentWindow.scrollX : 0) || 0,
-        scrollY: (currentWindow ? currentWindow.scrollY : 0) || 0,
+        viewportWidth: topViewport.viewportWidth,
+        viewportHeight: topViewport.viewportHeight,
+        scrollX: 0,
+        scrollY: 0,
         crossOriginFallback: false
       };
     } catch (error) {
@@ -84,10 +103,10 @@
         top: rect.top,
         width: rect.width,
         height: rect.height,
-        viewportWidth: rect.viewportWidth || window.innerWidth,
-        viewportHeight: rect.viewportHeight || window.innerHeight,
-        scrollX: rect.scrollX || 0,
-        scrollY: rect.scrollY || 0,
+        viewportWidth: topViewport.viewportWidth,
+        viewportHeight: topViewport.viewportHeight,
+        scrollX: 0,
+        scrollY: 0,
         crossOriginFallback: true
       };
     }
@@ -196,11 +215,8 @@
         const scaleX = image.width / viewportWidth;
         const scaleY = image.height / viewportHeight;
 
-        const scrollX = annotationRect.scrollX || 0;
-        const scrollY = annotationRect.scrollY || 0;
-
-        const x = Math.max(0, (annotationRect.left + scrollX) * scaleX);
-        const y = Math.max(0, (annotationRect.top + scrollY) * scaleY);
+        const x = Math.max(0, annotationRect.left * scaleX);
+        const y = Math.max(0, annotationRect.top * scaleY);
         const width = Math.max(1, annotationRect.width * scaleX);
         const height = Math.max(1, annotationRect.height * scaleY);
         const lineWidth = Math.max(2, Math.round(((scaleX + scaleY) / 2) * 3));
@@ -247,14 +263,8 @@
       return null;
     }
 
-    let convertedRect = annotationRect;
-    let isCrossOrigin = false;
-
-    if (frameContext && frameContext.isInFrame) {
-      const converted = convertRectToTopViewport(annotationRect, frameContext);
-      convertedRect = converted;
-      isCrossOrigin = converted.crossOriginFallback === true;
-    }
+    const convertedRect = convertRectToTopViewport(annotationRect, frameContext);
+    const isCrossOrigin = convertedRect.crossOriginFallback === true;
 
     return annotateScreenshot(nativeScreenshot, convertedRect, {
       shouldDrawFrame: !isCrossOrigin,
