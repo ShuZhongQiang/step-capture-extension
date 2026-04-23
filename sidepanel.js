@@ -17,6 +17,11 @@ const aiGenerateBtn = document.getElementById('ai-generate');
 const modeRadios = document.querySelectorAll('input[name="recording-mode"]');
 const sessionOverview = document.getElementById('session-overview');
 const documentStatus = document.getElementById('document-status');
+const aiApiKeyInput = document.getElementById('ai-api-key');
+const aiEndpointInput = document.getElementById('ai-endpoint');
+const aiModelInput = document.getElementById('ai-model');
+const aiLanguageInput = document.getElementById('ai-language');
+const aiSaveConfigBtn = document.getElementById('ai-save-config');
 
 function setDocumentStatus(status, message) {
   panelState = {
@@ -209,6 +214,39 @@ async function handleModeChange(event) {
 
   if (!result || result.ok === false) {
     throw new Error(result && result.error ? result.error : 'mode_update_failed');
+  }
+
+  if (result.snapshot) {
+    mergeSnapshot(result.snapshot);
+  }
+}
+
+async function handleSaveAiConfig() {
+  const aiConfig = {
+    apiKey: aiApiKeyInput && aiApiKeyInput.value ? aiApiKeyInput.value.trim() : '',
+    endpoint: aiEndpointInput && aiEndpointInput.value ? aiEndpointInput.value.trim() : '',
+    model: aiModelInput && aiModelInput.value ? aiModelInput.value.trim() : '',
+    language: aiLanguageInput && aiLanguageInput.value ? aiLanguageInput.value : 'zh-CN'
+  };
+
+  const hasConfig = aiConfig.apiKey || aiConfig.endpoint || aiConfig.model || aiConfig.language;
+  if (!hasConfig) {
+    alert('请至少填写一项配置。');
+    return;
+  }
+
+  const result = await sendPanelCommand(messages.COMMAND.SETTINGS_UPDATE, {
+    ai: aiConfig
+  });
+
+  if (!result || result.ok === false) {
+    throw new Error(result && result.error ? result.error : 'ai_config_save_failed');
+  }
+
+  if (aiConfig.apiKey) {
+    alert('AI 配置已保存！现在可以使用 AI 生成功能。');
+  } else {
+    alert('AI 配置已保存。');
   }
 
   if (result.snapshot) {
@@ -460,6 +498,15 @@ function setupEventListeners() {
       });
     });
   });
+
+  if (aiSaveConfigBtn) {
+    aiSaveConfigBtn.addEventListener('click', function onSaveConfigClick() {
+      handleSaveAiConfig().catch(function onSaveError(error) {
+        console.error('[ai-config] failed:', error);
+        alert('保存配置失败，请重试。');
+      });
+    });
+  }
 }
 
 function escapeHtml(value) {
