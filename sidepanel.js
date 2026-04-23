@@ -15,7 +15,6 @@ const exportMarkdownBtn = document.getElementById('export-markdown');
 const exportHtmlBtn = document.getElementById('export-html');
 const exportJsonBtn = document.getElementById('export-json');
 const aiGenerateBtn = document.getElementById('ai-generate');
-const panelTitle = document.getElementById('panel-title');
 const homeView = document.getElementById('home-view');
 const aiGenerateView = document.getElementById('ai-generate-view');
 const aiConfigView = document.getElementById('ai-config-view');
@@ -53,16 +52,6 @@ function switchView(viewName) {
       view.classList.remove('panel-view--active');
     }
   });
-
-  if (panelTitle) {
-    if (viewName === 'aiGenerate') {
-      panelTitle.textContent = 'AI 生成';
-    } else if (viewName === 'aiConfig') {
-      panelTitle.textContent = 'AI 配置';
-    } else {
-      panelTitle.textContent = '步骤图录制器';
-    }
-  }
 }
 
 function setDocumentStatus(status, message) {
@@ -128,8 +117,7 @@ function updateStatusUI() {
   }
 
   if (recordingStatus) {
-    recordingStatus.textContent = isRecording ? '录制中...' : '就绪';
-    recordingStatus.style.color = isRecording ? '#ef4444' : '#6b7280';
+    isRecording ? recordingStatus.classList.add('hidden') : recordingStatus.classList.remove('hidden');
   }
 
   if (recordingBadge) {
