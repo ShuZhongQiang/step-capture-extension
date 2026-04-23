@@ -73,14 +73,14 @@ body {
 
 /* 橙色主按钮 */
 .neo-btn-primary {
-  background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+  background: linear-gradient(135deg, #8BC34A 0%, #4CAF50 100%);
   color: white;
   box-shadow: 0 2px 4px rgba(249, 115, 22, 0.2);
   transition: all 0.2s ease;
 }
 
 .neo-btn-primary:hover {
-  background: linear-gradient(135deg, #fdba74 0%, #fb923c 100%);
+  background: linear-gradient(135deg, #96d44f 0%, #56c95a 100%);
   box-shadow: 0 4px 8px rgba(249, 115, 22, 0.25);
   transform: translateY(-2px);
   color: white;
@@ -300,12 +300,22 @@ body {
   border-radius: 12px;
   flex-shrink: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.12);
+  position: relative;
 }
 
 .control-buttons {
   display: flex;
   gap: 10px;
   margin-bottom: 8px;
+}
+
+.status-container {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .sidepanel-container .primary-button,
