@@ -38,6 +38,63 @@ const RECORDER_STORAGE_KEYS = RECORDER_CONSTANTS.STORAGE_KEYS || {
 };
 
 const sessionWriteLocks = new Map();
+const sessionStepMutationQueues = new Map();
+
+function runWithSessionStepMutationLock(sessionId, task) {
+  const key = sessionId ? String(sessionId) : '__no_session__';
+  const previous = sessionStepMutationQueues.get(key) || Promise.resolve();
+  const current = previous
+    .catch(function ignorePreviousError() {})
+    .then(function runTask() {
+      return task();
+    });
+
+  sessionStepMutationQueues.set(key, current);
+
+  return current.finally(function releaseQueue() {
+    if (sessionStepMutationQueues.get(key) === current) {
+      sessionStepMutationQueues.delete(key);
+    }
+  });
+}
+
+function toPositiveSeq(value) {
+  const seq = Number(value);
+  if (!Number.isFinite(seq)) {
+    return null;
+  }
+
+  const normalized = Math.floor(seq);
+  return normalized > 0 ? normalized : null;
+}
+
+function resolveUniqueSeq(stepRecords, stepId, preferredSeq) {
+  const usedSeq = new Set();
+  let maxSeq = 0;
+
+  for (const step of stepRecords) {
+    if (!step || step.id === stepId) {
+      continue;
+    }
+
+    const seq = toPositiveSeq(step.seq);
+    if (!seq) {
+      continue;
+    }
+
+    usedSeq.add(seq);
+    if (seq > maxSeq) {
+      maxSeq = seq;
+    }
+  }
+
+  const candidate = toPositiveSeq(preferredSeq);
+  if (candidate && !usedSeq.has(candidate)) {
+    return candidate;
+  }
+
+  return maxSeq + 1;
+}
 
 function getStorageLocal(keys) {
   return new Promise(function resolveStorage(resolve) {
@@ -295,39 +352,45 @@ async function calculateNextSeq(sessionId) {
 
 async function saveStep(stepInput) {
   const normalized = normalizeStepRecord(stepInput);
-  const existing = await getStepRecord(normalized.id);
-  const stepIds = await getSessionStepIds(normalized.sessionId);
-  const alreadyIndexed = stepIds.includes(normalized.id);
-  
-  let seq;
-  if (typeof normalized.seq === 'number' && normalized.seq > 0) {
-    seq = normalized.seq;
-  } else if (existing && typeof existing.seq === 'number' && existing.seq > 0) {
-    seq = existing.seq;
-  } else if (alreadyIndexed) {
-    seq = 1;
-  } else {
-    seq = await calculateNextSeq(normalized.sessionId);
-  }
 
-  const nextStep = normalizeStepRecord({
-    ...normalized,
-    seq: seq,
-    createdAt: existing && existing.createdAt ? existing.createdAt : normalized.createdAt,
-    updatedAt: new Date().toISOString()
+  return runWithSessionStepMutationLock(normalized.sessionId, async function saveStepWithLock() {
+    const existing = await getStepRecord(normalized.id);
+    const stepIds = await getSessionStepIds(normalized.sessionId);
+    const alreadyIndexed = stepIds.includes(normalized.id);
+    const currentSteps = await Promise.all(stepIds.map(function mapStep(stepId) {
+      return getStepRecord(stepId);
+    }));
+
+    let preferredSeq = null;
+    if (typeof normalized.seq === 'number' && normalized.seq > 0) {
+      preferredSeq = normalized.seq;
+    } else if (existing && typeof existing.seq === 'number' && existing.seq > 0) {
+      preferredSeq = existing.seq;
+    } else if (alreadyIndexed) {
+      const indexedPosition = stepIds.indexOf(normalized.id);
+      preferredSeq = indexedPosition >= 0 ? indexedPosition + 1 : null;
+    }
+
+    const seq = resolveUniqueSeq(currentSteps, normalized.id, preferredSeq);
+    const nextStep = normalizeStepRecord({
+      ...normalized,
+      seq: seq,
+      createdAt: existing && existing.createdAt ? existing.createdAt : normalized.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+
+    const payload = {
+      [RECORDER_STORAGE_KEYS.STEP(nextStep.id)]: nextStep
+    };
+
+    if (!alreadyIndexed) {
+      payload[RECORDER_STORAGE_KEYS.SESSION_STEPS(nextStep.sessionId)] = stepIds.concat([nextStep.id]);
+    }
+
+    await setStorageLocal(payload);
+    await updateSessionStepCount(nextStep.sessionId, alreadyIndexed ? stepIds.length : stepIds.length + 1);
+    return nextStep;
   });
-
-  const payload = {
-    [RECORDER_STORAGE_KEYS.STEP(nextStep.id)]: nextStep
-  };
-
-  if (!alreadyIndexed) {
-    payload[RECORDER_STORAGE_KEYS.SESSION_STEPS(nextStep.sessionId)] = stepIds.concat([nextStep.id]);
-  }
-
-  await setStorageLocal(payload);
-  await updateSessionStepCount(nextStep.sessionId, alreadyIndexed ? stepIds.length : stepIds.length + 1);
-  return nextStep;
 }
 
 async function listSessionSteps(sessionId) {
@@ -446,25 +509,33 @@ async function deleteStep(stepId) {
     return { ok: true, deleted: false };
   }
 
-  const deletedAssetIds = await deleteStepAssets(stepId);
-  for (const assetId of deletedAssetIds) {
-    await deleteAssetMeta(assetId);
-  }
+  return runWithSessionStepMutationLock(step.sessionId, async function deleteStepWithLock() {
+    const latestStep = await getStepRecord(stepId);
+    if (!latestStep) {
+      await deletePendingCommit(stepId);
+      return { ok: true, deleted: false };
+    }
 
-  const stepIds = await getSessionStepIds(step.sessionId);
-  const nextStepIds = stepIds.filter(function filterStepId(currentStepId) {
-    return currentStepId !== stepId;
+    const deletedAssetIds = await deleteStepAssets(stepId);
+    for (const assetId of deletedAssetIds) {
+      await deleteAssetMeta(assetId);
+    }
+
+    const stepIds = await getSessionStepIds(latestStep.sessionId);
+    const nextStepIds = stepIds.filter(function filterStepId(currentStepId) {
+      return currentStepId !== stepId;
+    });
+
+    await removeStorageLocal([
+      RECORDER_STORAGE_KEYS.STEP(stepId),
+      RECORDER_STORAGE_KEYS.PENDING_COMMIT(stepId)
+    ]);
+    await setSessionStepIds(latestStep.sessionId, nextStepIds);
+    await updateSessionStepCount(latestStep.sessionId, nextStepIds.length);
+    await renumberSessionSteps(latestStep.sessionId);
+
+    return { ok: true, deleted: true, stepId: stepId };
   });
-
-  await removeStorageLocal([
-    RECORDER_STORAGE_KEYS.STEP(stepId),
-    RECORDER_STORAGE_KEYS.PENDING_COMMIT(stepId)
-  ]);
-  await setSessionStepIds(step.sessionId, nextStepIds);
-  await updateSessionStepCount(step.sessionId, nextStepIds.length);
-  await renumberSessionSteps(step.sessionId);
-
-  return { ok: true, deleted: true, stepId: stepId };
 }
 
 async function clearActiveSessionSteps() {
