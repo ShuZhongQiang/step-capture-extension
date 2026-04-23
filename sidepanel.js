@@ -2,6 +2,7 @@ let panelState = createInitialPanelState();
 const previewLoadState = new Set();
 
 const messages = window.StepRecorderMessages;
+const constants = window.StepRecorderConstants || {};
 
 const startRecordBtn = document.getElementById('start-record');
 const stopRecordBtn = document.getElementById('stop-record');
@@ -14,6 +15,16 @@ const exportMarkdownBtn = document.getElementById('export-markdown');
 const exportHtmlBtn = document.getElementById('export-html');
 const exportJsonBtn = document.getElementById('export-json');
 const aiGenerateBtn = document.getElementById('ai-generate');
+const panelTitle = document.getElementById('panel-title');
+const homeView = document.getElementById('home-view');
+const aiGenerateView = document.getElementById('ai-generate-view');
+const aiConfigView = document.getElementById('ai-config-view');
+const openAiConfigBtn = document.getElementById('open-ai-config');
+const backFromAiGenerateBtn = document.getElementById('back-from-ai-generate');
+const backFromAiConfigBtn = document.getElementById('back-from-ai-config');
+const aiPromptInput = document.getElementById('ai-prompt');
+const aiGenerateConfirmBtn = document.getElementById('ai-generate-confirm');
+const aiGenerateCancelBtn = document.getElementById('ai-generate-cancel');
 const modeRadios = document.querySelectorAll('input[name="recording-mode"]');
 const sessionOverview = document.getElementById('session-overview');
 const documentStatus = document.getElementById('document-status');
@@ -22,6 +33,37 @@ const aiEndpointInput = document.getElementById('ai-endpoint');
 const aiModelInput = document.getElementById('ai-model');
 const aiLanguageInput = document.getElementById('ai-language');
 const aiSaveConfigBtn = document.getElementById('ai-save-config');
+
+const panelViews = {
+  home: homeView,
+  aiGenerate: aiGenerateView,
+  aiConfig: aiConfigView
+};
+
+function switchView(viewName) {
+  Object.keys(panelViews).forEach(function eachView(key) {
+    const view = panelViews[key];
+    if (!view) {
+      return;
+    }
+
+    if (key === viewName) {
+      view.classList.add('panel-view--active');
+    } else {
+      view.classList.remove('panel-view--active');
+    }
+  });
+
+  if (panelTitle) {
+    if (viewName === 'aiGenerate') {
+      panelTitle.textContent = 'AI 生成';
+    } else if (viewName === 'aiConfig') {
+      panelTitle.textContent = 'AI 配置';
+    } else {
+      panelTitle.textContent = '步骤图录制器';
+    }
+  }
+}
 
 function setDocumentStatus(status, message) {
   panelState = {
@@ -155,6 +197,37 @@ function getActiveTab() {
   });
 }
 
+function getStorageLocal(keys) {
+  return new Promise(function resolveStorage(resolve) {
+    chrome.storage.local.get(keys, resolve);
+  });
+}
+
+async function loadAiConfig() {
+  const storageKeys = constants.STORAGE_KEYS || {};
+  const settingsKey = storageKeys.SETTINGS || 'recorder:settings';
+  const defaultAi = constants.DEFAULT_AI_SETTINGS || {};
+  const result = await getStorageLocal([settingsKey]);
+  const savedSettings = result && result[settingsKey] ? result[settingsKey] : {};
+  const aiSettings = {
+    ...defaultAi,
+    ...((savedSettings && savedSettings.ai) || {})
+  };
+
+  if (aiApiKeyInput) {
+    aiApiKeyInput.value = aiSettings.apiKey || '';
+  }
+  if (aiEndpointInput) {
+    aiEndpointInput.value = aiSettings.endpoint || defaultAi.endpoint || '';
+  }
+  if (aiModelInput) {
+    aiModelInput.value = aiSettings.model || defaultAi.model || '';
+  }
+  if (aiLanguageInput) {
+    aiLanguageInput.value = aiSettings.language || defaultAi.language || 'zh-CN';
+  }
+}
+
 async function refreshSnapshot() {
   const result = await sendPanelCommand(messages.COMMAND.SESSION_GET_SNAPSHOT, {});
   if (result && result.ok && result.snapshot) {
@@ -243,11 +316,7 @@ async function handleSaveAiConfig() {
     throw new Error(result && result.error ? result.error : 'ai_config_save_failed');
   }
 
-  if (aiConfig.apiKey) {
-    alert('AI 配置已保存！现在可以使用 AI 生成功能。');
-  } else {
-    alert('AI 配置已保存。');
-  }
+  alert(aiConfig.apiKey ? 'AI 配置已保存，现在可以使用 AI 生成功能。' : 'AI 配置已保存。');
 
   if (result.snapshot) {
     mergeSnapshot(result.snapshot);
@@ -396,17 +465,17 @@ async function handleClearSteps() {
   await refreshSnapshot();
 }
 
-async function handleExport(format, useAi) {
+async function handleExport(format, useAi, options) {
   const sessionId = panelState.activeSessionId || (panelState.session && panelState.session.id);
   if (!sessionId) {
     alert('当前没有可导出的会话。');
     return;
   }
 
-  setDocumentStatus('building', '文档构建中...');
+  setDocumentStatus('building', useAi ? 'AI 文档生成中...' : '文档构建中...');
 
   try {
-    const buildResult = await requestDocumentBuild(sessionId, format, useAi);
+    const buildResult = await requestDocumentBuild(sessionId, format, useAi, options || {});
     await downloadExportBundle(buildResult);
 
     if (useAi) {
@@ -423,6 +492,30 @@ async function handleExport(format, useAi) {
   } catch (error) {
     setDocumentStatus('failed', '文档构建失败: ' + (error && error.message ? error.message : 'unknown_error'));
     throw error;
+  }
+}
+
+async function handleAiGenerateSubmit() {
+  const prompt = aiPromptInput && aiPromptInput.value ? aiPromptInput.value.trim() : '';
+
+  if (!prompt) {
+    alert('请输入 AI 生成提示词。');
+    return;
+  }
+
+  if (aiGenerateConfirmBtn) {
+    aiGenerateConfirmBtn.disabled = true;
+    aiGenerateConfirmBtn.textContent = '生成中...';
+  }
+
+  try {
+    await handleExport('markdown', true, { prompt: prompt });
+    switchView('home');
+  } finally {
+    if (aiGenerateConfirmBtn) {
+      aiGenerateConfirmBtn.disabled = false;
+      aiGenerateConfirmBtn.textContent = '确认生成';
+    }
   }
 }
 
@@ -483,7 +576,43 @@ function setupEventListeners() {
 
   if (aiGenerateBtn) {
     aiGenerateBtn.addEventListener('click', function onAiGenerateClick() {
-      handleExport('markdown', true).catch(function onAiError(error) {
+      switchView('aiGenerate');
+      if (aiPromptInput) {
+        aiPromptInput.focus();
+      }
+    });
+  }
+
+  if (openAiConfigBtn) {
+    openAiConfigBtn.addEventListener('click', function onOpenAiConfigClick() {
+      loadAiConfig().catch(function onLoadError(error) {
+        console.error('[ai-config] load failed:', error);
+      });
+      switchView('aiConfig');
+    });
+  }
+
+  if (backFromAiGenerateBtn) {
+    backFromAiGenerateBtn.addEventListener('click', function onBackClick() {
+      switchView('home');
+    });
+  }
+
+  if (backFromAiConfigBtn) {
+    backFromAiConfigBtn.addEventListener('click', function onBackClick() {
+      switchView('home');
+    });
+  }
+
+  if (aiGenerateCancelBtn) {
+    aiGenerateCancelBtn.addEventListener('click', function onCancelClick() {
+      switchView('home');
+    });
+  }
+
+  if (aiGenerateConfirmBtn) {
+    aiGenerateConfirmBtn.addEventListener('click', function onConfirmClick() {
+      handleAiGenerateSubmit().catch(function onAiError(error) {
         console.error('[export ai] failed:', error);
         alert('AI 文档生成失败，请检查配置后重试。');
       });
@@ -601,7 +730,12 @@ function init() {
   connectPanelPort();
   onPanelEvent(handlePanelEventMessage);
   setupEventListeners();
+  switchView('home');
   renderAll();
+
+  loadAiConfig().catch(function onConfigError(error) {
+    console.error('[ai-config] load failed:', error);
+  });
 
   refreshSnapshot().catch(function onSnapshotError(error) {
     console.error('[snapshot] failed:', error);

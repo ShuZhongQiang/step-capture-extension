@@ -29,16 +29,18 @@ function normalizeAiEndpoint(endpoint) {
 
 function buildFallbackAiRewrite(input) {
   const schemas = self.StepRecorderSchemas || {};
+  const steps = Array.isArray(input && input.steps) ? input.steps : [];
+  const userPrompt = input && input.prompt ? String(input.prompt).trim() : '';
   const payload = typeof schemas.createAiRewriteResult === 'function'
     ? schemas.createAiRewriteResult({
       title: 'AI 增强步骤指南',
-      summary: input.steps.length > 0
-        ? '本指南共包含 ' + input.steps.length + ' 个操作步骤，已按页面上下文自动整理。'
+      summary: steps.length > 0
+        ? (userPrompt ? '已根据用户提示整理：' + userPrompt : '本文档共包含 ' + steps.length + ' 个操作步骤，已按页面上下文自动整理。')
         : '当前没有可改写的步骤。',
-      sections: input.steps.length > 0
-        ? [{ heading: '操作步骤', stepIds: input.steps.map(function mapStep(step) { return step.stepId; }) }]
+      sections: steps.length > 0
+        ? [{ heading: '操作步骤', stepIds: steps.map(function mapStep(step) { return step.stepId; }) }]
         : [],
-      rewrittenSteps: input.steps.map(function mapStep(step) {
+      rewrittenSteps: steps.map(function mapStep(step) {
         const targetLabel = step.targetText || '目标元素';
         const pageTitle = step.pageTitle || step.pageUrl || '当前页面';
         return {
@@ -67,7 +69,8 @@ function buildAiMessages(input) {
   const promptPayload = {
     session: input.session,
     steps: input.steps,
-    language: input.language
+    language: input.language,
+    userPrompt: input.prompt || ''
   };
 
   return [
@@ -79,7 +82,8 @@ function buildAiMessages(input) {
         '只返回 JSON，不要返回 Markdown，不要解释。',
         'JSON 结构必须是 { title, summary, sections, rewrittenSteps }。',
         'sections 为数组，每项包含 { heading, stepIds }。',
-        'rewrittenSteps 为数组，每项包含 { stepId, title, instruction }。'
+        'rewrittenSteps 为数组，每项包含 { stepId, title, instruction }。',
+        '如果 userPrompt 不为空，请优先按 userPrompt 的要求组织标题、摘要、章节和步骤表达。'
       ].join(' ')
     },
     {

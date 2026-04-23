@@ -11,100 +11,138 @@
     <div class="sidepanel-header">
       <div class="header-title">
         <span class="header-icon">📌</span>
-        <h1>步骤图录制器</h1>
+        <h1 id="panel-title">步骤图录制器</h1>
       </div>
       <div id="recording-badge" class="recording-badge hidden">● REC</div>
     </div>
 
-    <div class="control-section">
-      <div class="control-buttons">
-        <button id="start-record" class="neo-btn neo-btn-primary">▶ 开始录制</button>
-        <button id="stop-record" class="neo-btn neo-btn-danger" disabled>■ 停止录制</button>
-      </div>
-      <div id="recording-status" class="status">就绪</div>
-    </div>
-
-    <div class="meta-grid">
-      <div class="session-section compact-section">
-        <h2>当前 Session</h2>
-        <div id="session-overview" class="session-overview">
-          <div class="overview-empty">当前没有活动会话</div>
+    <div id="home-view" class="panel-view panel-view--active">
+      <div class="control-section">
+        <div class="control-buttons">
+          <button id="start-record" class="neo-btn neo-btn-primary">▶ 开始录制</button>
+          <button id="stop-record" class="neo-btn neo-btn-danger" disabled>■ 停止录制</button>
         </div>
+        <div id="recording-status" class="status">就绪</div>
       </div>
 
-      <div class="document-section compact-section">
-        <h2>文档状态</h2>
-        <div class="document-row">
-          <div id="document-status" class="doc-status doc-status--idle" title="文档尚未构建">未构建</div>
-          <button id="ai-generate" class="neo-btn neo-btn-secondary neo-btn-sm">AI 生成</button>
+      <div class="meta-grid">
+        <div class="session-section compact-section">
+          <h2>当前 Session</h2>
+          <div id="session-overview" class="session-overview">
+            <div class="overview-empty">当前没有活动会话</div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div class="mode-section">
-      <h2>录制模式</h2>
-      <div class="mode-options">
-        <label class="mode-option">
-          <input type="radio" name="recording-mode" value="auto" checked>
-          <span class="mode-copy">
-            <span class="mode-label">自动模式</span>
-            <span class="mode-desc">点击后自动截图并保存</span>
-          </span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" name="recording-mode" value="manual">
-          <span class="mode-copy">
-            <span class="mode-label">手动确认模式</span>
-            <span class="mode-desc">高亮后确认是否保存</span>
-          </span>
-        </label>
+        <div class="document-section compact-section">
+          <h2>文档状态</h2>
+          <div class="document-row">
+            <div id="document-status" class="doc-status doc-status--idle" title="文档尚未构建">未构建</div>
+            <button id="ai-generate" class="neo-btn neo-btn-secondary neo-btn-sm">AI 生成</button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="ai-config-section">
-      <h2>AI 配置</h2>
-      <div class="ai-config-form">
-        <div class="ai-form-group">
-          <label for="ai-api-key" class="ai-form-label">API Key</label>
-          <input type="password" id="ai-api-key" class="ai-input" placeholder="sk-..." autocomplete="off">
-        </div>
-        <div class="ai-form-group">
-          <label for="ai-endpoint" class="ai-form-label">Endpoint</label>
-          <input type="text" id="ai-endpoint" class="ai-input" placeholder="https://api.openai.com/v1/chat/completions">
-        </div>
-        <div class="ai-form-group">
-          <label for="ai-model" class="ai-form-label">Model</label>
-          <input type="text" id="ai-model" class="ai-input" placeholder="gpt-4.1-mini">
-        </div>
-        <div class="ai-form-group">
-          <label for="ai-language" class="ai-form-label">语言</label>
-          <select id="ai-language" class="ai-input">
-            <option value="zh-CN">简体中文</option>
-            <option value="zh-TW">繁體中文</option>
-            <option value="en-US">English</option>
-            <option value="ja-JP">日本語</option>
-          </select>
-        </div>
-        <button id="ai-save-config" class="neo-btn neo-btn-primary neo-btn-sm" style="width: 100%; margin-top: 8px;">💾 保存配置</button>
+      <div class="quick-actions">
+        <button id="open-ai-config" class="quick-action-card" type="button">
+          <span class="quick-action-title">AI 配置</span>
+          <span class="quick-action-desc">模型、Endpoint、API Key</span>
+        </button>
       </div>
-    </div>
 
-    <div class="steps-section">
-      <div class="steps-header">
-        <h2>步骤列表 <span id="steps-count" class="steps-count"></span></h2>
-        <button id="clear-steps" class="neo-btn neo-btn-sm neo-btn-danger" title="清空所有步骤">🗑 清空</button>
+      <div class="mode-section">
+        <h2>录制模式</h2>
+        <div class="mode-options">
+          <label class="mode-option">
+            <input type="radio" name="recording-mode" value="auto" checked>
+            <span class="mode-copy">
+              <span class="mode-label">自动模式</span>
+              <span class="mode-desc">点击后自动截图并保存</span>
+            </span>
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="recording-mode" value="manual">
+            <span class="mode-copy">
+              <span class="mode-label">手动确认模式</span>
+              <span class="mode-desc">高亮后确认是否保存</span>
+            </span>
+          </label>
+        </div>
       </div>
-      <div id="steps-container" class="steps-container">
-        <p class="empty-message">暂无步骤记录</p>
+
+      <div class="steps-section">
+        <div class="steps-header">
+          <h2>步骤列表 <span id="steps-count" class="steps-count"></span></h2>
+          <button id="clear-steps" class="neo-btn neo-btn-sm neo-btn-danger" title="清空所有步骤">清空</button>
+        </div>
+        <div id="steps-container" class="steps-container">
+          <p class="empty-message">暂无步骤记录</p>
+        </div>
+      </div>
+
+      <div class="export-section">
+        <h2>导出</h2>
+        <div class="export-options">
+          <button id="export-markdown" class="export-button">Markdown</button>
+          <button id="export-html" class="export-button">HTML</button>
+          <button id="export-json" class="export-button">JSON</button>
+        </div>
       </div>
     </div>
 
-    <div class="export-section">
-      <h2>导出</h2>
-      <div class="export-options">
-        <button id="export-markdown" class="export-button">📄 Markdown</button>
-        <button id="export-html" class="export-button">🌐 HTML</button>
-        <button id="export-json" class="export-button">🧾 JSON</button>
+    <div id="ai-generate-view" class="panel-view">
+      <div class="subpage-header">
+        <button id="back-from-ai-generate" class="neo-btn neo-btn-sm" type="button">返回</button>
+        <div>
+          <h2>AI 生成</h2>
+          <p>输入你希望 AI 如何整理当前步骤文档。</p>
+        </div>
+      </div>
+
+      <div class="ai-page-card">
+        <label for="ai-prompt" class="ai-form-label">提示词</label>
+        <textarea id="ai-prompt" class="ai-input ai-textarea" rows="8" placeholder="例如：请把步骤整理成面向新用户的操作手册，语气简洁，按业务目标分段。"></textarea>
+        <div class="ai-page-actions">
+          <button id="ai-generate-confirm" class="neo-btn neo-btn-primary" type="button">确认生成</button>
+          <button id="ai-generate-cancel" class="neo-btn" type="button">取消</button>
+        </div>
+        <p class="ai-page-note">生成结果会以 Markdown 文档打包下载，当前步骤截图会一起导出。</p>
+      </div>
+    </div>
+
+    <div id="ai-config-view" class="panel-view">
+      <div class="subpage-header">
+        <button id="back-from-ai-config" class="neo-btn neo-btn-sm" type="button">返回</button>
+        <div>
+          <h2>AI 配置</h2>
+          <p>配置 OpenAI 兼容接口，保存后用于 AI 生成。</p>
+        </div>
+      </div>
+
+      <div class="ai-page-card">
+        <div class="ai-config-form">
+          <div class="ai-form-group">
+            <label for="ai-api-key" class="ai-form-label">API Key</label>
+            <input type="password" id="ai-api-key" class="ai-input" placeholder="sk-..." autocomplete="off">
+          </div>
+          <div class="ai-form-group">
+            <label for="ai-endpoint" class="ai-form-label">Endpoint</label>
+            <input type="text" id="ai-endpoint" class="ai-input" placeholder="https://api.openai.com/v1/chat/completions">
+          </div>
+          <div class="ai-form-group">
+            <label for="ai-model" class="ai-form-label">Model</label>
+            <input type="text" id="ai-model" class="ai-input" placeholder="gpt-4.1-mini">
+          </div>
+          <div class="ai-form-group">
+            <label for="ai-language" class="ai-form-label">语言</label>
+            <select id="ai-language" class="ai-input">
+              <option value="zh-CN">简体中文</option>
+              <option value="zh-TW">繁體中文</option>
+              <option value="en-US">English</option>
+              <option value="ja-JP">日本語</option>
+            </select>
+          </div>
+          <button id="ai-save-config" class="neo-btn neo-btn-primary" type="button">保存配置</button>
+        </div>
       </div>
     </div>
   </div>

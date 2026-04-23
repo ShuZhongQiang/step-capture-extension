@@ -69,12 +69,14 @@
     });
   }
 
-  async function requestDocumentBuild(sessionId, format, useAi) {
+  async function requestDocumentBuild(sessionId, format, useAi, options) {
     const messages = global.StepRecorderMessages;
+    const opts = options || {};
     const result = await sendPanelCommand(messages.COMMAND.DOCUMENT_BUILD, {
       sessionId: sessionId,
       format: format,
-      useAi: Boolean(useAi)
+      useAi: Boolean(useAi),
+      prompt: opts.prompt || ''
     });
 
     if (!result || result.ok === false) {

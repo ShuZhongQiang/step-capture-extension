@@ -232,6 +232,7 @@ async function buildDocumentResult(payload) {
   const sessionId = payload && payload.sessionId ? payload.sessionId : null;
   const format = payload && payload.format ? payload.format : 'markdown';
   const useAi = Boolean(payload && payload.useAi);
+  const prompt = payload && payload.prompt ? String(payload.prompt).trim() : '';
   const settings = await getRecorderSettings();
   const canonicalDocument = await buildCanonicalDocument(sessionId);
   let finalDocument = canonicalDocument;
@@ -245,7 +246,8 @@ async function buildDocumentResult(payload) {
     aiResult = await rewriteDocumentWithAi({
       session: canonicalDocument.session,
       steps: canonicalDocument.steps,
-      language: settings.ai && settings.ai.language ? settings.ai.language : 'zh-CN'
+      language: settings.ai && settings.ai.language ? settings.ai.language : 'zh-CN',
+      prompt: prompt
     }, settings.ai || {});
     finalDocument = applyAiRewriteToDocument(canonicalDocument, aiResult);
   }
