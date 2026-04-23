@@ -607,7 +607,7 @@ async function updateRecordingMode(mode) {
   const settings = await saveRecorderSettings({ recordingMode: mode });
   const activeSession = await getActiveSession();
 
-  if (activeSession && activeSession.status === SESSION_STATUS.RECORDING) {
+  if (activeSession) {
     await setSessionRecord({
       ...activeSession,
       mode: mode

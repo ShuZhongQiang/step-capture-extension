@@ -1,4 +1,4 @@
-﻿const recorderPanelPorts = new Set();
+const recorderPanelPorts = new Set();
 
 function createRouterRequestId(prefix) {
   return (prefix || 'req') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);

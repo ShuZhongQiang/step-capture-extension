@@ -95,6 +95,9 @@ async function startRecordingSessionFlow(payload, context) {
     await clearActiveSessionSteps();
   }
 
+  const settings = await getRecorderSettings();
+  const targetMode = (payload && payload.mode) ? payload.mode : (settings.recordingMode || 'auto');
+  
   if (payload && payload.mode) {
     await updateRecordingMode(payload.mode);
   }
@@ -106,7 +109,7 @@ async function startRecordingSessionFlow(payload, context) {
     type: messages.BACKGROUND_TO_CONTENT.RUNTIME_START,
     payload: {
       sessionId: session.id,
-      mode: session.mode
+      mode: targetMode
     }
   });
 
@@ -117,7 +120,7 @@ async function startRecordingSessionFlow(payload, context) {
         type: messages.BACKGROUND_TO_CONTENT.RUNTIME_START,
         payload: {
           sessionId: session.id,
-          mode: session.mode
+          mode: targetMode
         }
       });
     }
@@ -132,7 +135,7 @@ async function startRecordingSessionFlow(payload, context) {
     type: messages.BACKGROUND_TO_CONTENT.RUNTIME_CONFIGURE,
     payload: {
       sessionId: session.id,
-      mode: session.mode
+      mode: targetMode
     }
   });
 
