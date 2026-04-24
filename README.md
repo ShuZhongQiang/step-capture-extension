@@ -326,12 +326,71 @@ cd Step_Proj_Solo
 
 ## 许可证
 
-MIT License
+本项目采用双许可证模式：
+
+### AGPL-3.0 开源许可证
+
+本项目的核心代码默认采用 [AGPL-3.0](LICENSE) 许可证发布。AGPL-3.0 是一个强 copyleft 许可证，适用于开源和商业用途，但要求：
+
+- 如果您修改了软件并在网络上提供服务，必须向用户提供修改后的源代码
+- 任何衍生作品也必须采用 AGPL-3.0 许可证
+- 分发时必须提供完整的源代码
+
+**适用于**：开源项目、学习研究、遵守 AGPL 条款的商业应用
+
+### 商业许可证
+
+如果您无法满足 AGPL-3.0 的要求，需要购买商业许可证。商业许可适用于以下场景：
+
+- **私有部署**：无需公开源代码
+- **团队协作功能**：多用户协作和团队管理
+- **高级模板**：访问专有的高级模板
+- **企业工作流**：集成到企业专有系统
+- **SaaS 服务**：作为服务提供且无需开源
+- **闭源分发**：作为闭源产品分发
+
+详情请参阅 [商业许可条款](COMMERCIAL_LICENSE.md)。
+
+### 第三方依赖
+
+本项目使用了第三方库，其许可证信息请参阅 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## License
+
+This project uses a dual-licensing model:
+
+### AGPL-3.0 Open Source License
+
+The core code is released under the [AGPL-3.0](LICENSE) license by default. AGPL-3.0 is a strong copyleft license suitable for open source and commercial use, but requires:
+
+- If you modify the software and provide network access, you must provide the modified source code to users
+- Any derivative works must also be licensed under AGPL-3.0
+- Complete source code must be provided when distributing
+
+**Applicable to**: Open source projects, research and learning, commercial applications that comply with AGPL terms
+
+### Commercial License
+
+If you cannot comply with AGPL-3.0 requirements, you need to purchase a commercial license. Commercial licensing applies to:
+
+- **Private deployment**: No need to open source your code
+- **Team collaboration**: Multi-user collaboration and team management
+- **Advanced templates**: Access to proprietary premium templates
+- **Enterprise workflows**: Integration into proprietary enterprise systems
+- **SaaS services**: Provide as a service without open sourcing
+- **Closed-source distribution**: Distribute as a closed-source product
+
+For details, see [Commercial License Terms](COMMERCIAL_LICENSE.md).
+
+### Third-Party Dependencies
+
+This project uses third-party libraries. For license information, see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## 联系方式
 
-- 项目 Issues: [GitHub Issues](链接)
-- 邮箱：[你的邮箱]
+- **GitHub Issues**: [问题反馈](https://github.com/ShuZhongQiang/step-capture-extension/issues)
+- **Email**: chenspace1998@gmail.com
+- **商业许可咨询**: 请通过上述方式联系我们
 
 ---
 
