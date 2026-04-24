@@ -230,16 +230,28 @@ async function handleStartRecording() {
     return;
   }
 
-  const shouldClear = panelState.steps.length > 0
-    ? confirm('检测到已有步骤，开始前是否清空当前会话步骤？')
-    : false;
+  const hasExistingSteps = Array.isArray(panelState.steps) && panelState.steps.length > 0;
+  const isStoppedSession = panelState.session && panelState.session.status === 'stopped';
 
-  setDocumentStatus('idle', '');
+  let shouldClear = false;
+  if (hasExistingSteps) {
+    if (isStoppedSession) {
+      const userChoice = confirm('检测到已暂停的会话中有步骤，是否保留这些步骤并继续录制？\n\n点击"确定"保留步骤并继续\n点击"取消"清空步骤重新开始');
+      shouldClear = !userChoice;
+    } else {
+      shouldClear = confirm('检测到已有步骤，开始前是否清空当前会话步骤？');
+    }
+  }
+
+  if (shouldClear) {
+    setDocumentStatus('idle', '');
+  }
 
   const result = await sendPanelCommand(messages.COMMAND.SESSION_START, {
     tabId: activeTab.id,
     mode: panelState.recordingMode,
-    clearExisting: shouldClear
+    clearExisting: shouldClear,
+    resumeExisting: isStoppedSession && !shouldClear
   });
 
   if (!result || result.ok === false) {

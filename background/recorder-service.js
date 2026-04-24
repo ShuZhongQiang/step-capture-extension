@@ -33,7 +33,7 @@ async function buildPanelStepFromRecord(step) {
     },
     preview: {
       status: primaryAssetId
-        ? (assetMeta ? previewStatus.READY || 'ready' : previewStatus.IDLE || 'idle')
+        ? (previewStatus.IDLE || 'idle')
         : (previewStatus.UNAVAILABLE || 'unavailable'),
       assetId: primaryAssetId,
       width: assetMeta ? assetMeta.width : null,
@@ -102,7 +102,8 @@ async function startRecordingSessionFlow(payload, context) {
     await updateRecordingMode(payload.mode);
   }
 
-  const session = await startRecordingSession(tabId, tab.windowId);
+  const resumeExisting = payload && payload.resumeExisting;
+  const session = await startRecordingSession(tabId, tab.windowId, resumeExisting);
   const messages = self.StepRecorderMessages;
 
   let started = await context.sendMessageToTab(tabId, {

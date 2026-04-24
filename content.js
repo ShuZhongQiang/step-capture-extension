@@ -364,6 +364,15 @@
       depth += 1;
     }
 
+    if (bestElement !== element) {
+      const bestRect = bestElement.getBoundingClientRect();
+      const clickPointArea = Math.max(10 * 10, 1);
+      const elementArea = Math.max(bestRect.width * bestRect.height, 1);
+      if (elementArea / clickPointArea > 50) {
+        return element;
+      }
+    }
+
     return bestElement;
   }
 

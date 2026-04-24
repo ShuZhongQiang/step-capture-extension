@@ -52,9 +52,45 @@
     };
   }
 
+  function mergeSnapshotStep(currentStep, snapshotStep) {
+    if (!currentStep || !snapshotStep) {
+      return snapshotStep;
+    }
+
+    const currentPreview = currentStep.preview || normalizePreview(currentStep);
+    const snapshotPreview = snapshotStep.preview || normalizePreview(snapshotStep);
+    const isSameAsset = currentPreview.assetId && currentPreview.assetId === snapshotPreview.assetId;
+
+    if (!isSameAsset) {
+      return snapshotStep;
+    }
+
+    const mergedPreview = {
+      ...snapshotPreview
+    };
+
+    if (!mergedPreview.dataUrl && currentPreview.dataUrl) {
+      mergedPreview.dataUrl = currentPreview.dataUrl;
+      mergedPreview.status = previewStatus.READY || 'ready';
+    } else if (currentPreview.status === previewStatus.LOADING && !mergedPreview.dataUrl) {
+      mergedPreview.status = previewStatus.LOADING || 'loading';
+    }
+
+    return {
+      ...snapshotStep,
+      preview: mergedPreview
+    };
+  }
+
   function applySnapshot(currentState, snapshot) {
     const steps = Array.isArray(snapshot && snapshot.steps)
-      ? sortSteps(snapshot.steps.map(normalizeStep))
+      ? sortSteps(snapshot.steps.map(normalizeStep)).map(function mergeStep(step) {
+          const currentStep = currentState.steps.find(function findCurrentStep(item) {
+            return item.id === step.id;
+          });
+
+          return mergeSnapshotStep(currentStep, step);
+        })
       : [];
 
     return {

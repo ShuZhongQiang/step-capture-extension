@@ -563,12 +563,26 @@ async function getRecordingState() {
   };
 }
 
-async function startRecordingSession(tabId, windowId) {
+async function startRecordingSession(tabId, windowId, resumeExisting) {
   const settings = await getRecorderSettings();
   const activeSession = await getActiveSession();
 
   if (activeSession && activeSession.status === SESSION_STATUS.RECORDING && activeSession.tabId === tabId) {
     return activeSession;
+  }
+
+  if (resumeExisting && activeSession && activeSession.status === SESSION_STATUS.STOPPED) {
+    const resumedSession = createSessionRecord({
+      ...activeSession,
+      status: SESSION_STATUS.RECORDING,
+      tabId: tabId,
+      windowId: typeof windowId === 'number' ? windowId : activeSession.windowId,
+      endedAt: null
+    });
+
+    await setSessionRecord(resumedSession);
+    await setActiveSessionId(activeSession.id);
+    return resumedSession;
   }
 
   if (activeSession && activeSession.status === SESSION_STATUS.RECORDING && activeSession.tabId !== tabId) {
