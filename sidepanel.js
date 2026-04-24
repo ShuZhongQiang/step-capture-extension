@@ -295,14 +295,21 @@ async function handleModeChange(event) {
 }
 
 async function handleSaveAiConfig() {
+  const defaultAi = constants.DEFAULT_AI_SETTINGS || {};
   const aiConfig = {
+    enabled: Boolean(
+      (aiApiKeyInput && aiApiKeyInput.value && aiApiKeyInput.value.trim())
+      || (aiEndpointInput && aiEndpointInput.value && aiEndpointInput.value.trim())
+      || (aiModelInput && aiModelInput.value && aiModelInput.value.trim())
+    ),
+    provider: defaultAi.provider || 'openai-compatible',
     apiKey: aiApiKeyInput && aiApiKeyInput.value ? aiApiKeyInput.value.trim() : '',
     endpoint: aiEndpointInput && aiEndpointInput.value ? aiEndpointInput.value.trim() : '',
     model: aiModelInput && aiModelInput.value ? aiModelInput.value.trim() : '',
     language: aiLanguageInput && aiLanguageInput.value ? aiLanguageInput.value : 'zh-CN'
   };
 
-  const hasConfig = aiConfig.apiKey || aiConfig.endpoint || aiConfig.model || aiConfig.language;
+  const hasConfig = aiConfig.apiKey || aiConfig.endpoint || aiConfig.model;
   if (!hasConfig) {
     alert('请至少填写一项配置。');
     return;

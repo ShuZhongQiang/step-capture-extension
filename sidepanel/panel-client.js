@@ -113,7 +113,7 @@
     clearPendingWithError('panel_disconnected');
   }
 
-  function sendPanelCommand(type, payload) {
+  function sendPanelCommand(type, payload, options) {
     if (!panelPort) {
       connectPanelPort();
     }
@@ -123,12 +123,16 @@
     }
 
     const requestId = nextRequestId();
+    const commandOptions = options || {};
+    const timeoutMs = Number(commandOptions.timeoutMs) > 0
+      ? Number(commandOptions.timeoutMs)
+      : 15000;
 
     return new Promise(function resolveCommand(resolve, reject) {
       const timeoutId = setTimeout(function onTimeout() {
         pendingRequests.delete(requestId);
         reject(new Error('command_timeout'));
-      }, 15000);
+      }, timeoutMs);
 
       pendingRequests.set(requestId, {
         resolve: resolve,

@@ -72,11 +72,16 @@
   async function requestDocumentBuild(sessionId, format, useAi, options) {
     const messages = global.StepRecorderMessages;
     const opts = options || {};
+    const timeoutMs = Number(opts.timeoutMs) > 0
+      ? Number(opts.timeoutMs)
+      : (useAi ? 90000 : 45000);
     const result = await sendPanelCommand(messages.COMMAND.DOCUMENT_BUILD, {
       sessionId: sessionId,
       format: format,
       useAi: Boolean(useAi),
       prompt: opts.prompt || ''
+    }, {
+      timeoutMs: timeoutMs
     });
 
     if (!result || result.ok === false) {

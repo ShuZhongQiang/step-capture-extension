@@ -27,6 +27,15 @@ function normalizeAiEndpoint(endpoint) {
   return raw.replace(/\/$/, '') + '/chat/completions';
 }
 
+function getAiRequestTimeoutMs(aiSettings) {
+  const timeoutMs = Number(aiSettings && aiSettings.timeoutMs);
+  if (timeoutMs > 0) {
+    return timeoutMs;
+  }
+
+  return 75000;
+}
+
 function buildFallbackAiRewrite(input) {
   const schemas = self.StepRecorderSchemas || {};
   const steps = Array.isArray(input && input.steps) ? input.steps : [];
@@ -95,19 +104,45 @@ function buildAiMessages(input) {
 
 async function requestOpenAiCompatibleRewrite(input, aiSettings) {
   const endpoint = normalizeAiEndpoint(aiSettings.endpoint);
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + aiSettings.apiKey
-    },
-    body: JSON.stringify({
-      model: aiSettings.model || 'gpt-4.1-mini',
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: buildAiMessages(input)
-    })
-  });
+  const requestTimeoutMs = getAiRequestTimeoutMs(aiSettings);
+  const abortController = typeof AbortController !== 'undefined'
+    ? new AbortController()
+    : null;
+  let didTimeout = false;
+  const timeoutId = abortController
+    ? setTimeout(function abortRequest() {
+      didTimeout = true;
+      abortController.abort();
+    }, requestTimeoutMs)
+    : null;
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + aiSettings.apiKey
+      },
+      body: JSON.stringify({
+        model: aiSettings.model || 'gpt-4.1-mini',
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: buildAiMessages(input)
+      }),
+      signal: abortController ? abortController.signal : undefined
+    });
+  } catch (error) {
+    if (didTimeout || (error && error.name === 'AbortError')) {
+      throw new Error('ai_request_timeout');
+    }
+
+    throw error;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 
   if (!response.ok) {
     throw new Error('ai_http_' + response.status);
