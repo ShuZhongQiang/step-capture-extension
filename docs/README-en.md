@@ -17,9 +17,10 @@ A Chrome browser extension similar to ScribeHow/Tango that automatically records
 
 ### 🚀 Technical Highlights
 
+- 🔒 **100% Local Processing** - All data and screenshots stored locally, never uploaded to any server
 - 🖱️ **Smart Element Recognition** - Auto-identify buttons, links, forms and other interactive elements
 - 🎨 **Neumorphism UI** - Modern Neumorphism design style
-- 📷 **HD Screenshot Annotation** - Chrome native API + Canvas rounded highlight box
+- 📷 **HD Screenshot Annotations** - Chrome native API + Canvas rounded highlight box
 - 🔄 **Cross-Page Persistent Recording** - Support continued recording after page refresh
 - 🖼️ **Full-Screen Image Preview** - Click thumbnail to view HD screenshots
 
@@ -30,6 +31,20 @@ A Chrome browser extension similar to ScribeHow/Tango that automatically records
 **Accessibility Support** - Generate detailed step instructions for visually impaired users
 **QA Test Reports** - Record bug reproduction steps for easier developer debugging
 **Standard Operating Procedures** - Automate enterprise SOP document generation
+**Sensitive Business Workflows** - Banking, healthcare, finance privacy-sensitive scenarios (data stored completely locally, not uploaded to cloud)
+
+## 🆚 Why Choose GuidePilot?
+
+| Feature | GuidePilot | Tango / Scribe |
+|---------|------------|----------------|
+| **Data Privacy** | ✅ 100% local storage, never uploaded | ❌ Screenshots uploaded to third-party servers |
+| **Installation** | ✅ Chrome extension, one-click install | ✅ Chrome extension |
+| **AI Document Generation** | ✅ OpenAI-compatible API support | ✅ Built-in AI |
+| **Multi-Format Export** | ✅ Markdown / HTML / JSON | ⚠️ Limited formats |
+| **Offline Usage** | ✅ Fully supported | ❌ Requires internet connection |
+| **Pricing** | ✅ Open source & free | 💰 Paid subscription |
+
+> 🔒 **Privacy & Security is GuidePilot's Core Advantage**: Unlike competitors like Tango and Scribe, all your operation data and screenshots are stored completely locally in your browser and never uploaded to any third-party servers. This is crucial for teams handling sensitive information (such as internal enterprise systems, customer data, financial information).
 
 ## 🚀 Quick Start
 
