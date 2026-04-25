@@ -208,11 +208,30 @@ function applyAiRewriteToDocument(documentPayload, aiResult) {
     }
   });
 
+  var aiSections = Array.isArray(aiResult.output.sections) ? aiResult.output.sections : [];
+  aiSections = aiSections.map(function normalizeSection(sec) {
+    var count = 0;
+    if (sec.stepIds && Array.isArray(sec.stepIds)) {
+      count = sec.stepIds.length;
+    }
+    return {
+      id: sec.id || sec.heading || ('section-' + aiSections.indexOf(sec)),
+      heading: sec.heading || sec.title || 'AI章节',
+      pageKey: sec.pageKey || '',
+      pageUrl: sec.pageUrl || '',
+      pageTitle: sec.pageTitle || '',
+      startSeq: sec.startSeq || 0,
+      endSeq: sec.endSeq || 0,
+      stepIndices: sec.stepIndices || [],
+      stepCount: count
+    };
+  });
+
   const nextDocument = {
     session: documentPayload.session,
     title: aiResult.output.title || documentPayload.title || '步骤指南',
     summary: aiResult.output.summary || '',
-    sections: Array.isArray(aiResult.output.sections) ? aiResult.output.sections : [],
+    sections: aiSections,
     steps: (documentPayload.steps || []).map(function mapStep(step) {
       const rewrite = rewrittenMap.get(step.stepId);
       const nextStep = {
@@ -230,6 +249,30 @@ function applyAiRewriteToDocument(documentPayload, aiResult) {
   };
 
   return nextDocument;
+}
+
+function sanitizeAssetFilename(name) {
+  return String(name || '')
+    .replace(/[\\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
+    .slice(0, 40);
+}
+
+function generateAssetFilenameForStep(step, index) {
+  var title = step.title || ('step-' + step.seq);
+  var suffix = (typeof index === 'number') ? '-' + (index + 1) : '';
+  var maxLen = 40 - suffix.length;
+  if (maxLen < 10) {
+    maxLen = 10;
+  }
+  var sanitized = sanitizeAssetFilename(title).slice(0, maxLen);
+  if (!sanitized || sanitized.length < 2) {
+    sanitized = 'step-' + step.seq;
+  }
+  return 'images/' + sanitized + suffix + '.png';
 }
 
 async function buildDocumentResult(payload) {
@@ -257,9 +300,11 @@ async function buildDocumentResult(payload) {
   }
 
   const assets = [];
+  const assetFilenameMap = {};
   const steps = Array.isArray(finalDocument.steps) ? finalDocument.steps : [];
 
-  for (const step of steps) {
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
     if (!step.primaryAssetId) {
       continue;
     }
@@ -269,16 +314,19 @@ async function buildDocumentResult(payload) {
       continue;
     }
 
+    const humanFilename = generateAssetFilenameForStep(step, i);
+    assetFilenameMap[step.primaryAssetId] = humanFilename;
+
     assets.push({
       assetId: step.primaryAssetId,
-      filename: 'images/' + step.primaryAssetId + '.png',
+      filename: humanFilename,
       mimeType: preview.mimeType || 'image/png',
       dataUrl: preview.dataUrl
     });
   }
 
   const assetPathResolver = function resolveAssetPath(assetId) {
-    return 'images/' + assetId + '.png';
+    return assetFilenameMap[assetId] || ('images/' + assetId + '.png');
   };
 
   let filename = 'steps-guide.md';

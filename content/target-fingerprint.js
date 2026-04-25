@@ -30,7 +30,49 @@
     }
 
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-      return safeText(element.value || element.placeholder || element.name || element.type || '', 120);
+      const ariaLabel = element.getAttribute('aria-label');
+      const placeholder = element.placeholder;
+      const name = element.name;
+      const inputType = element.type || '';
+
+      // 优先使用语义化标识，而不是用户输入的 value
+      // 按照优先级：aria-label > placeholder > name > type
+      if (ariaLabel) {
+        return safeText(ariaLabel, 120);
+      }
+      if (placeholder) {
+        return safeText(placeholder, 120);
+      }
+      if (name) {
+        return safeText(name, 120);
+      }
+
+      // 对常见输入类型提供语义化描述
+      const typeLabels = {
+        'password': '密码',
+        'username': '用户名',
+        'email': '邮箱',
+        'text': '文本输入框',
+        'search': '搜索框',
+        'tel': '电话号码',
+        'url': '网址',
+        'number': '数字',
+        'checkbox': '复选框',
+        'radio': '单选框',
+        'file': '文件上传',
+        'date': '日期',
+        'time': '时间',
+        'datetime-local': '日期时间',
+        'month': '月份',
+        'week': '周',
+        'color': '颜色选择',
+        'range': '范围滑块',
+        'submit': '提交按钮',
+        'reset': '重置按钮',
+        'button': '按钮'
+      };
+
+      return typeLabels[inputType] || '输入框';
     }
 
     const ariaLabel = element.getAttribute('aria-label');

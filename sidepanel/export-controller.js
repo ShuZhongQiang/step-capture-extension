@@ -1,4 +1,4 @@
-﻿(function initExportController(global) {
+(function initExportController(global) {
   function dataUrlToBlob(dataUrl) {
     const parts = String(dataUrl || '').split(',', 2);
     const header = parts[0] || '';
@@ -15,19 +15,37 @@
     return new Blob([bytes], { type: mimeType });
   }
 
-  function createFolderName() {
+  function sanitizeFilename(name) {
+    return String(name || '')
+      .replace(/[\\\/:*?"<>|]/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase()
+      .slice(0, 50);
+  }
+
+  function createExportFilename(documentPayload) {
     const now = new Date();
     const pad = function pad(value) {
       return String(value).padStart(2, '0');
     };
-
-    return 'step-guide-' + now.getFullYear()
+    const timestamp = now.getFullYear()
       + pad(now.getMonth() + 1)
       + pad(now.getDate())
       + '-'
       + pad(now.getHours())
-      + pad(now.getMinutes())
-      + pad(now.getSeconds());
+      + pad(now.getMinutes());
+
+    var baseName = 'step-guide';
+    if (documentPayload && documentPayload.title) {
+      var sanitized = sanitizeFilename(documentPayload.title);
+      if (sanitized.length > 3) {
+        baseName = sanitized;
+      }
+    }
+
+    return baseName + '-' + timestamp;
   }
 
   function triggerBlobDownload(blob, filename) {
@@ -91,55 +109,68 @@
     return result;
   }
 
-  async function downloadExportBundle(buildResult) {
+  async function downloadExportBundle(buildResult, options) {
     if (!buildResult || !buildResult.rendered) {
       throw new Error('invalid_build_result');
     }
 
-    const folderName = createFolderName();
+    const opts = options || {};
     const rendered = buildResult.rendered;
-    const assets = Array.isArray(buildResult.assets) ? buildResult.assets : [];
+    const documentPayload = buildResult.document;
+    const rawAssets = Array.isArray(buildResult.assets) ? buildResult.assets : [];
+
+    const exportFilename = createExportFilename(documentPayload);
 
     const mainBlob = new Blob([rendered.content || ''], {
       type: rendered.mimeType || 'text/plain;charset=utf-8'
     });
 
+    var assetMap = rawAssets.map(function mapAsset(asset) {
+      return {
+        filename: asset.filename || ('images/' + asset.assetId + '.png'),
+        original: asset
+      };
+    });
+
     if (typeof JSZip !== 'undefined') {
       const zip = new JSZip();
-      zip.file(rendered.filename || 'steps-guide.txt', mainBlob);
+      zip.file(rendered.filename || 'steps-guide.md', mainBlob);
 
-      for (const asset of assets) {
-        if (!asset || !asset.filename || !asset.dataUrl) {
+      for (var i = 0; i < assetMap.length; i++) {
+        const mapping = assetMap[i];
+        if (!mapping || !mapping.original || !mapping.original.dataUrl) {
           continue;
         }
-        zip.file(asset.filename, dataUrlToBlob(asset.dataUrl));
+        zip.file(mapping.filename, dataUrlToBlob(mapping.original.dataUrl));
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      triggerBlobDownload(zipBlob, folderName + '.zip');
+      triggerBlobDownload(zipBlob, exportFilename + '.zip');
       return;
     }
 
     const canUseDownloads = chrome.downloads && typeof chrome.downloads.download === 'function';
 
     if (canUseDownloads) {
-      await downloadBlobWithChrome(mainBlob, folderName + '/' + (rendered.filename || 'steps-guide.txt'));
-      for (const asset of assets) {
-        if (!asset || !asset.filename || !asset.dataUrl) {
+      await downloadBlobWithChrome(mainBlob, exportFilename + '/' + (rendered.filename || 'steps-guide.md'));
+      for (var j = 0; j < assetMap.length; j++) {
+        const mapping = assetMap[j];
+        if (!mapping || !mapping.original || !mapping.original.dataUrl) {
           continue;
         }
-        await downloadBlobWithChrome(dataUrlToBlob(asset.dataUrl), folderName + '/' + asset.filename);
+        await downloadBlobWithChrome(dataUrlToBlob(mapping.original.dataUrl), exportFilename + '/' + mapping.filename);
       }
       return;
     }
 
-    triggerBlobDownload(mainBlob, rendered.filename || 'steps-guide.txt');
-    for (const asset of assets) {
-      if (!asset || !asset.filename || !asset.dataUrl) {
+    triggerBlobDownload(mainBlob, rendered.filename || 'steps-guide.md');
+    for (var k = 0; k < assetMap.length; k++) {
+      const mapping = assetMap[k];
+      if (!mapping || !mapping.original || !mapping.original.dataUrl) {
         continue;
       }
-      const fileName = asset.filename.split('/').pop() || asset.filename;
-      triggerBlobDownload(dataUrlToBlob(asset.dataUrl), fileName);
+      const fileName = mapping.filename.split('/').pop() || mapping.filename;
+      triggerBlobDownload(dataUrlToBlob(mapping.original.dataUrl), fileName);
     }
   }
 
